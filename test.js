@@ -8,6 +8,7 @@ window.onclick = function(event) {
         var myDropdown = document.getElementById("myDropdown");
         if (myDropdown.classList.contains('show')) {
             myDropdown.classList.remove('show');
+            //last passes figure out the hash
         }
     }
 }
