@@ -7,5 +7,5 @@ function timer() {
 }
 
 function kickOut() {
-    window.location.href = "https://www.youtube.com/watch?v=xvFZjo5PgG0"; 
+    window.location.href = "https://www.youtube.com/watch?v=xvFZjo5PgG0";
 }
