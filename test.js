@@ -9,6 +9,7 @@ window.onclick = function(event) {
         if (myDropdown.classList.contains('show')) {
             myDropdown.classList.remove('show');
             //last passes figure out the hash
+            //we love 1 2 8 symmetry 
         }
     }
 }
