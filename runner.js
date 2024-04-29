@@ -15,7 +15,7 @@ function kickOut() {
 }
 
 function winOpen() {
-    open1 = window.open("https://www.youtube.com/watch?v=xvFZjo5PgG0")
+    open1 = window.open("https://www.youtube.com/watch?v=xvFZjo5PgG0");
     setTimeout(winClose, 12000);
 }
 
