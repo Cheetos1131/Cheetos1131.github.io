@@ -5,6 +5,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   try {
     const response = await fetch(`https://api.github.com/users/${githubUsername}/repos`);
+    if (!response.ok) throw new Error(`GitHub API error: ${response.status}`);
+
     const repositories = await response.json();
 
     repositories
@@ -21,6 +23,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         githubProjectsContainer.appendChild(projectCard);
       });
   } catch (error) {
-    githubProjectsContainer.innerHTML = "<p>Error fetching GitHub repositories.</p>";
+    githubProjectsContainer.innerHTML = `<p>Error: ${error.message}</p>`;
   }
 });
