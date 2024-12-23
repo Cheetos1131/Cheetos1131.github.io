@@ -1,29 +1,26 @@
-// script.js
+const githubUsername = "Cheetos1131";
 
-const GITHUB_USERNAME = "Cheetos1131";
+document.addEventListener("DOMContentLoaded", async () => {
+  const githubProjectsContainer = document.getElementById("github-projects");
 
-// Fetch GitHub repositories and populate the list
-async function fetchGitHubProjects() {
-    const githubProjectsList = document.getElementById("github-projects");
+  try {
+    const response = await fetch(`https://api.github.com/users/${githubUsername}/repos`);
+    const repositories = await response.json();
 
-    try {
-        const response = await fetch(`https://api.github.com/users/${GITHUB_USERNAME}/repos`);
-        const repos = await response.json();
+    repositories
+      .filter(repo => repo.name !== `${githubUsername}.github.io`) // Exclude the GitHub Pages repo
+      .forEach(repo => {
+        const projectCard = document.createElement("div");
+        projectCard.classList.add("project-card");
 
-        repos.forEach(repo => {
-            const listItem = document.createElement("li");
-            const link = document.createElement("a");
-            link.href = repo.html_url;
-            link.target = "_blank";
-            link.textContent = repo.name;
+        projectCard.innerHTML = `
+          <h3><a href="${repo.html_url}" target="_blank">${repo.name}</a></h3>
+          <p>${repo.description || "No description available."}</p>
+        `;
 
-            listItem.appendChild(link);
-            githubProjectsList.appendChild(listItem);
-        });
-    } catch (error) {
-        githubProjectsList.innerHTML = `<li>Error fetching GitHub projects: ${error.message}</li>`;
-    }
-}
-
-// Run the function to fetch GitHub projects
-fetchGitHubProjects();
+        githubProjectsContainer.appendChild(projectCard);
+      });
+  } catch (error) {
+    githubProjectsContainer.innerHTML = "<p>Error fetching GitHub repositories.</p>";
+  }
+});

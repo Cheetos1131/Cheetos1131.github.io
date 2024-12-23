@@ -1,38 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cheetos1131 Projects</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cheetos1131 Projects</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="sidebar">
-        <h1>Cheetos1131</h1>
-        <nav>
-            <ul>
-                <li><a href="#github">GitHub Projects</a></li>
-                <li><a href="#latest-code">Latest Code Projects</a></li>
-            </ul>
-        </nav>
+  <header>
+    <h1>Cheetos1131's Projects</h1>
+    <p>Explore my GitHub and latest projects.</p>
+  </header>
+  <nav>
+    <div class="dropdown">
+      <button class="dropbtn">Menu</button>
+      <div class="dropdown-content">
+        <a href="index.html">Home</a>
+        <a href="about.html">About</a>
+        <a href="interests.html">Interests</a>
+      </div>
     </div>
-    <div class="content">
-        <section id="github">
-            <h2>GitHub Projects</h2>
-            <ul id="github-projects">
-                <!-- Dynamically populated with JS -->
-            </ul>
-        </section>
-        <section id="latest-code">
-            <h2>Latest Code Projects</h2>
-            <ul id="latest-projects">
-                <!-- Add your projects here -->
-                <li>Project A - Description</li>
-                <li>Project B - Description</li>
-                <li>Project C - Description</li>
-            </ul>
-        </section>
-    </div>
-    <script src="script.js"></script>
+  </nav>
+  <main>
+    <section id="github">
+      <h2>GitHub Repositories</h2>
+      <div id="github-projects" class="projects-container"></div>
+    </section>
+    <section id="latest-projects">
+      <h2>Latest Code Projects</h2>
+      <ul>
+        <li><strong>Project A:</strong> Description of the project.</li>
+        <li><strong>Project B:</strong> Description of the project.</li>
+        <li><strong>Project C:</strong> Description of the project.</li>
+      </ul>
+    </section>
+  </main>
+  <footer>
+    <p>© 2024 Cheetos1131 | <a href="https://github.com/Cheetos1131" target="_blank">GitHub</a></p>
+  </footer>
+  <script src="scripts.js"></script>
 </body>
 </html>
