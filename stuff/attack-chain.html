@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VEN0m Attack Chain — Visual Analysis</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Sora:wght@300;400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #06080c;
+    --bg2: #0c1018;
+    --surface: #10151f;
+    --surface2: #161d2b;
+    --surface3: #1c2537;
+    --border: #1e2a3a;
+    --text: #cdd6e4;
+    --text-bright: #eaf0f9;
+    --muted: #4a5a72;
+    --red: #ff4d5a;
+    --red-glow: rgba(255,77,90,0.2);
+    --orange: #ff8b3e;
+    --orange-glow: rgba(255,139,62,0.15);
+    --yellow: #ffd93d;
+    --yellow-glow: rgba(255,217,61,0.12);
+    --blue: #4dabf7;
+    --blue-glow: rgba(77,171,247,0.12);
+    --violet: #b197fc;
+    --violet-glow: rgba(177,151,252,0.12);
+    --green: #51cf66;
+    --green-glow: rgba(81,207,102,0.12);
+    --teal: #38d9a9;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Sora', sans-serif;
+    overflow-x: hidden;
+  }
+
+  /* Noise overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .page { max-width: 1000px; margin: 0 auto; padding: 60px 32px 80px; }
+
+  /* Header */
+  .header { margin-bottom: 64px; text-align: center; }
+
+  .header-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 16px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.1s;
+  }
+
+  .header h1 {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    color: var(--text-bright);
+    line-height: 1.1;
+    margin-bottom: 12px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.2s;
+  }
+
+  .header h1 span { color: var(--red); }
+
+  .header-sub {
+    font-size: 15px;
+    color: var(--muted);
+    font-weight: 400;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.3s;
+  }
+
+  /* Privilege bar */
+  .priv-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin: 40px auto 64px;
+    max-width: 740px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.4s;
+  }
+
+  .priv-node {
+    text-align: center;
+    flex: 0 0 auto;
+  }
+
+  .priv-node .ring-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .priv-node .ring-box {
+    width: 120px;
+    padding: 10px 0;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid;
+  }
+
+  .priv-arrow {
+    flex: 1;
+    height: 2px;
+    background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 40%, transparent 50%, var(--muted) 60%, var(--muted) 100%);
+    position: relative;
+    min-width: 40px;
+    max-width: 80px;
+  }
+
+  .priv-arrow::after {
+    content: '>';
+    position: absolute;
+    right: -4px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  /* Stage card */
+  .stage {
+    position: relative;
+    margin-bottom: 48px;
+    opacity: 0;
+    animation: fadeUp 0.7s ease forwards;
+  }
+
+  .stage:nth-child(1) { animation-delay: 0.5s; }
+  .stage:nth-child(2) { animation-delay: 0.65s; }
+  .stage:nth-child(3) { animation-delay: 0.8s; }
+  .stage:nth-child(4) { animation-delay: 0.95s; }
+
+  .stage-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .stage-num {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .stage-title-group { flex: 1; }
+
+  .stage-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-bright);
+    letter-spacing: -0.3px;
+  }
+
+  .stage-subtitle {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .stage-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+
+  .stage-body {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    margin-left: 22px;
+    border-left: 3px solid;
+    position: relative;
+  }
+
+  .stage-body::before {
+    content: '';
+    position: absolute;
+    top: -17px;
+    left: -2px;
+    width: 3px;
+    height: 17px;
+  }
+
+  /* Flow steps inside card */
+  .flow-steps { display: flex; flex-direction: column; gap: 14px; }
+
+  .fstep {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .fstep-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .fstep-text {
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .fstep-text strong { color: var(--text-bright); font-weight: 600; }
+
+  .code-inline {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    background: rgba(0,0,0,0.4);
+    padding: 2px 7px;
+    border-radius: 4px;
+    color: var(--teal);
+    white-space: nowrap;
+  }
+
+  .code-block {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    background: rgba(0,0,0,0.5);
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-top: 10px;
+    line-height: 1.7;
+    overflow-x: auto;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .key-insight {
+    margin-top: 18px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.6;
+    border-left: 3px solid;
+  }
+
+  .key-insight .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  /* Stage color themes */
+  .stage-orange .stage-num { background: var(--orange-glow); color: var(--orange); border: 2px solid var(--orange); }
+  .stage-orange .stage-tag { background: var(--orange-glow); color: var(--orange); }
+  .stage-orange .stage-body { border-left-color: var(--orange); }
+  .stage-orange .stage-body::before { background: var(--orange); }
+  .stage-orange .fstep-icon { background: var(--orange-glow); color: var(--orange); }
+  .stage-orange .key-insight { background: var(--orange-glow); border-left-color: var(--orange); }
+  .stage-orange .key-insight .label { color: var(--orange); }
+
+  .stage-violet .stage-num { background: var(--violet-glow); color: var(--violet); border: 2px solid var(--violet); }
+  .stage-violet .stage-tag { background: var(--violet-glow); color: var(--violet); }
+  .stage-violet .stage-body { border-left-color: var(--violet); }
+  .stage-violet .stage-body::before { background: var(--violet); }
+  .stage-violet .fstep-icon { background: var(--violet-glow); color: var(--violet); }
+  .stage-violet .key-insight { background: var(--violet-glow); border-left-color: var(--violet); }
+  .stage-violet .key-insight .label { color: var(--violet); }
+
+  .stage-red .stage-num { background: var(--red-glow); color: var(--red); border: 2px solid var(--red); }
+  .stage-red .stage-tag { background: var(--red-glow); color: var(--red); }
+  .stage-red .stage-body { border-left-color: var(--red); }
+  .stage-red .stage-body::before { background: var(--red); }
+  .stage-red .fstep-icon { background: var(--red-glow); color: var(--red); }
+  .stage-red .key-insight { background: var(--red-glow); border-left-color: var(--red); }
+  .stage-red .key-insight .label { color: var(--red); }
+
+  .stage-blue .stage-num { background: var(--blue-glow); color: var(--blue); border: 2px solid var(--blue); }
+  .stage-blue .stage-tag { background: var(--blue-glow); color: var(--blue); }
+  .stage-blue .stage-body { border-left-color: var(--blue); }
+  .stage-blue .stage-body::before { background: var(--blue); }
+  .stage-blue .fstep-icon { background: var(--blue-glow); color: var(--blue); }
+  .stage-blue .key-insight { background: var(--blue-glow); border-left-color: var(--blue); }
+  .stage-blue .key-insight .label { color: var(--blue); }
+
+  /* Connector between stages */
+  .stage-connector {
+    width: 3px;
+    height: 24px;
+    margin: -24px 0 -24px 41px;
+    position: relative;
+    z-index: -1;
+  }
+
+  .stage-connector.c-orange { background: linear-gradient(to bottom, var(--orange), var(--violet)); }
+  .stage-connector.c-violet { background: linear-gradient(to bottom, var(--violet), var(--red)); }
+  .stage-connector.c-red { background: linear-gradient(to bottom, var(--red), var(--blue)); }
+
+  /* Detection matrix */
+  .detection-section {
+    margin-top: 56px;
+    opacity: 0;
+    animation: fadeUp 0.7s ease forwards 1.1s;
+  }
+
+  .detection-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    letter-spacing: -0.3px;
+  }
+
+  .det-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+
+  .det-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    transition: border-color 0.2s;
+  }
+
+  .det-card:hover { border-color: var(--green); }
+
+  .det-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .det-card-stage {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  .det-card-diff {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+
+  .diff-med { background: var(--yellow-glow); color: var(--yellow); }
+  .diff-hard { background: var(--red-glow); color: var(--red); }
+  .diff-easy { background: var(--green-glow); color: var(--green); }
+
+  .det-card-body {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .det-indicator {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--teal);
+    background: rgba(0,0,0,0.3);
+    padding: 6px 10px;
+    border-radius: 4px;
+    margin-top: 8px;
+    display: inline-block;
+  }
+
+  /* MITRE section */
+  .mitre-section {
+    margin-top: 48px;
+    opacity: 0;
+    animation: fadeUp 0.7s ease forwards 1.25s;
+  }
+
+  .mitre-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 16px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .mitre-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .mitre-tag {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 11px;
+    transition: border-color 0.2s;
+  }
+
+  .mitre-tag:hover { border-color: var(--blue); }
+
+  .mitre-tag .tid {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700;
+    color: var(--blue);
+    margin-bottom: 2px;
+    font-size: 12px;
+  }
+
+  .mitre-tag .tname { color: var(--muted); font-size: 11px; }
+
+  /* Footer */
+  .footer {
+    margin-top: 64px;
+    text-align: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 1.4s;
+    padding: 24px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 700px) {
+    .page { padding: 32px 16px 60px; }
+    .header h1 { font-size: 28px; }
+    .det-grid { grid-template-columns: 1fr; }
+    .priv-bar { flex-wrap: wrap; gap: 8px; }
+    .priv-arrow { display: none; }
+    .stage-body { margin-left: 12px; padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-label">Threat Analysis &bull; Defensive Reference</div>
+    <h1>VEN<span>0</span>m Attack Chain</h1>
+    <p class="header-sub">UAC Bypass &rarr; BYOVD &rarr; AV/EDR Destruction &rarr; Persistence</p>
+  </div>
+
+  <!-- PRIVILEGE ESCALATION BAR -->
+  <div class="priv-bar">
+    <div class="priv-node">
+      <div class="ring-label" style="color:var(--muted)">Ring 3</div>
+      <div class="ring-box" style="border-color:var(--orange); color:var(--orange); background:var(--orange-glow);">Standard User</div>
+    </div>
+    <div class="priv-arrow"></div>
+    <div class="priv-node">
+      <div class="ring-label" style="color:var(--muted)">Ring 3</div>
+      <div class="ring-box" style="border-color:var(--violet); color:var(--violet); background:var(--violet-glow);">Administrator</div>
+    </div>
+    <div class="priv-arrow"></div>
+    <div class="priv-node">
+      <div class="ring-label" style="color:var(--muted)">Ring 0</div>
+      <div class="ring-box" style="border-color:var(--red); color:var(--red); background:var(--red-glow);">Kernel Access</div>
+    </div>
+    <div class="priv-arrow"></div>
+    <div class="priv-node">
+      <div class="ring-label" style="color:var(--muted)">Persist</div>
+      <div class="ring-box" style="border-color:var(--blue); color:var(--blue); background:var(--blue-glow);">Survival</div>
+    </div>
+  </div>
+
+  <!-- STAGE 1: UAC BYPASS -->
+  <div class="stage stage-orange">
+    <div class="stage-header">
+      <div class="stage-num">01</div>
+      <div class="stage-title-group">
+        <div class="stage-title">UAC Bypass via slui.exe</div>
+        <div class="stage-subtitle">Standard User &rarr; High Integrity (Administrator)</div>
+      </div>
+      <div class="stage-tag">T1548.002</div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">a</div>
+          <div class="fstep-text"><strong>Elevation check</strong> &mdash; Queries process token via <span class="code-inline">OpenProcessToken</span> + <span class="code-inline">GetTokenInformation(TokenElevation)</span>. If already admin, skip this stage.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">b</div>
+          <div class="fstep-text"><strong>Registry hijack</strong> &mdash; Writes to <span class="code-inline">HKCU\Software\Classes\Launcher.SystemSettings\Shell\Open\Command</span>. Sets default value to VEN0m's own path, sets <span class="code-inline">DelegateExecute</span> to empty string to force COM fallback.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">c</div>
+          <div class="fstep-text"><strong>Trigger auto-elevation</strong> &mdash; Launches <span class="code-inline">slui.exe</span> via <span class="code-inline">ShellExecuteW</span>. Windows auto-elevates it (Microsoft-signed, in manifest). No UAC dialog shown.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">d</div>
+          <div class="fstep-text"><strong>Hijacked execution</strong> &mdash; Elevated <span class="code-inline">slui.exe</span> reads the poisoned registry key and re-launches VEN0m with admin privileges. Original process exits.</div>
+        </div>
+      </div>
+      <div class="key-insight">
+        <div class="label">Why it works</div>
+        Auto-elevating binaries trust HKCU registry paths that any standard user can write to. UAC was never designed as a hard security boundary.
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-connector c-orange"></div>
+
+  <!-- STAGE 2: BYOVD -->
+  <div class="stage stage-violet">
+    <div class="stage-header">
+      <div class="stage-num">02</div>
+      <div class="stage-title-group">
+        <div class="stage-title">Vulnerable Driver Loading</div>
+        <div class="stage-subtitle">IMFForceDelete.sys &bull; CVE-2025-26125 &bull; IObit Malware Fighter</div>
+      </div>
+      <div class="stage-tag">T1068</div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">a</div>
+          <div class="fstep-text"><strong>Extract embedded driver</strong> &mdash; VEN0m drops <span class="code-inline">IMFForceDelete.sys</span> (embedded in binary) to a temp directory. The driver is legitimately signed by IObit.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">b</div>
+          <div class="fstep-text"><strong>Create kernel service</strong> &mdash; Registers a kernel-type service with a disguised name (e.g. <span class="code-inline">MicrosoftUpdate11.01</span>). Includes checks for existing/stopped services.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">c</div>
+          <div class="fstep-text"><strong>Load into Ring 0</strong> &mdash; Starting the service loads the driver into kernel space. Windows validates the signature and allows it &mdash; the driver is properly signed despite being vulnerable.</div>
+        </div>
+      </div>
+      <div class="key-insight">
+        <div class="label">The irony</div>
+        A driver component from an anti-malware product (IObit Malware Fighter) is being weaponized to defeat other security products. Driver signature enforcement only checks "who signed it" — not "is it safe."
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-connector c-violet"></div>
+
+  <!-- STAGE 3: AV/EDR DESTRUCTION -->
+  <div class="stage stage-red">
+    <div class="stage-header">
+      <div class="stage-num">03</div>
+      <div class="stage-title-group">
+        <div class="stage-title">AV/EDR Destruction</div>
+        <div class="stage-subtitle">Kernel-level arbitrary file deletion</div>
+      </div>
+      <div class="stage-tag">T1562.001</div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">a</div>
+          <div class="fstep-text"><strong>Open driver handle</strong> &mdash; VEN0m obtains a handle to the loaded <span class="code-inline">IMFForceDelete.sys</span> device object.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">b</div>
+          <div class="fstep-text"><strong>Send IOCTL for each target</strong> &mdash; Calls <span class="code-inline">DeviceIoControl</span> with IOCTL <span class="code-inline">0x8016E000</span>, passing a wide Unicode string of the target path and its byte length.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">c</div>
+          <div class="fstep-text"><strong>Kernel-level force delete</strong> &mdash; The driver processes the request from Ring 0, deleting files even if locked by running processes. Bypasses all usermode file protections.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">d</div>
+          <div class="fstep-text"><strong>Gradual degradation</strong> &mdash; AV/EDR processes lose supporting DLLs, configs, and signature databases. They malfunction progressively and eventually stop protecting the system.</div>
+        </div>
+      </div>
+      <div class="code-block">
+        <span style="color:var(--muted)">// Targeted directories</span><br>
+        <span style="color:var(--red)">TARGETS</span> = [<br>
+        &nbsp;&nbsp;<span style="color:var(--yellow)">"C:\Program Files (x86)\Kaspersky Lab"</span>,<br>
+        &nbsp;&nbsp;<span style="color:var(--yellow)">"C:\Program Files\Bitdefender"</span>,<br>
+        &nbsp;&nbsp;<span style="color:var(--yellow)">"C:\Program Files\Bitdefender Agent"</span>,<br>
+        &nbsp;&nbsp;<span style="color:var(--yellow)">"C:\Program Files\Windows Defender"</span>,<br>
+        ]
+      </div>
+      <div class="key-insight">
+        <div class="label">Novel approach</div>
+        Previous BYOVD techniques killed processes (hookable) or patched kernel memory (scannable). File deletion is a blind spot — it doesn't trigger behavioral detections that monitor for process termination or memory tampering.
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-connector c-red"></div>
+
+  <!-- STAGE 4: PERSISTENCE -->
+  <div class="stage stage-blue">
+    <div class="stage-header">
+      <div class="stage-num">04</div>
+      <div class="stage-title-group">
+        <div class="stage-title">Persistence via Winlogon</div>
+        <div class="stage-subtitle">Userinit registry key hijack</div>
+      </div>
+      <div class="stage-tag">T1547.004</div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">a</div>
+          <div class="fstep-text"><strong>Drop copy</strong> &mdash; VEN0m copies itself to <span class="code-inline">%LOCALAPPDATA%</span> for a persistent file location.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">b</div>
+          <div class="fstep-text"><strong>Modify Userinit</strong> &mdash; Appends VEN0m's path to <span class="code-inline">HKLM\...\Winlogon\Userinit</span> (comma-separated from legitimate <span class="code-inline">userinit.exe</span>). Runs on every user login.</div>
+        </div>
+      </div>
+      <div class="key-insight">
+        <div class="label">Detection opportunity</div>
+        Modifications to the Winlogon Userinit key are almost always malicious. This is one of the easiest stages to detect if monitoring is in place.
+      </div>
+    </div>
+  </div>
+
+  <!-- DETECTION MATRIX -->
+  <div class="detection-section">
+    <div class="detection-title">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Detection &amp; Hunting Matrix
+    </div>
+    <div class="det-grid">
+      <div class="det-card">
+        <div class="det-card-header">
+          <span class="det-card-stage" style="color:var(--orange)">Stage 1 &bull; UAC Bypass</span>
+          <span class="det-card-diff diff-med">MEDIUM</span>
+        </div>
+        <div class="det-card-body">Monitor registry writes under HKCU\Software\Classes\ for Shell\Open\Command modifications, especially DelegateExecute being set to empty.</div>
+        <div class="det-indicator">Sysmon Event ID 13 &bull; Registry Value Set</div>
+      </div>
+      <div class="det-card">
+        <div class="det-card-header">
+          <span class="det-card-stage" style="color:var(--violet)">Stage 2 &bull; Driver Load</span>
+          <span class="det-card-diff diff-med">MEDIUM</span>
+        </div>
+        <div class="det-card-body">Alert on new kernel services with driver files in temp directories. Hash-based detection for known vulnerable drivers. Monitor for sc.exe or service creation APIs.</div>
+        <div class="det-indicator">Sysmon Event ID 6 &bull; Driver Loaded</div>
+      </div>
+      <div class="det-card">
+        <div class="det-card-header">
+          <span class="det-card-stage" style="color:var(--red)">Stage 3 &bull; File Deletion</span>
+          <span class="det-card-diff diff-hard">HARD</span>
+        </div>
+        <div class="det-card-body">Rapid file deletions in security product directories from kernel context. File integrity monitoring on AV/EDR installations. DeviceIoControl calls to unusual device objects.</div>
+        <div class="det-indicator">FIM alerts &bull; AV health monitoring</div>
+      </div>
+      <div class="det-card">
+        <div class="det-card-header">
+          <span class="det-card-stage" style="color:var(--blue)">Stage 4 &bull; Persistence</span>
+          <span class="det-card-diff diff-easy">EASY</span>
+        </div>
+        <div class="det-card-body">Winlogon Userinit modifications are rare and almost always malicious. Simple registry monitoring catches this reliably.</div>
+        <div class="det-indicator">Sysmon Event ID 13 &bull; HKLM Winlogon key</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MITRE MAPPING -->
+  <div class="mitre-section">
+    <div class="mitre-title">// MITRE ATT&CK Mapping</div>
+    <div class="mitre-grid">
+      <div class="mitre-tag">
+        <div class="tid">T1548.002</div>
+        <div class="tname">Bypass User Account Control</div>
+      </div>
+      <div class="mitre-tag">
+        <div class="tid">T1068</div>
+        <div class="tname">Exploitation for Privilege Escalation</div>
+      </div>
+      <div class="mitre-tag">
+        <div class="tid">T1543.003</div>
+        <div class="tname">Windows Service</div>
+      </div>
+      <div class="mitre-tag">
+        <div class="tid">T1562.001</div>
+        <div class="tname">Disable or Modify Tools</div>
+      </div>
+      <div class="mitre-tag">
+        <div class="tid">T1547.004</div>
+        <div class="tname">Winlogon Helper DLL</div>
+      </div>
+      <div class="mitre-tag">
+        <div class="tid">T1014</div>
+        <div class="tname">Rootkit (Kernel Driver)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Defensive security reference &bull; For threat hunting &amp; detection engineering
+  </div>
+
+</div>
+
+</body>
+</html>

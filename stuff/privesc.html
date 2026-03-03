@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UAC Bypass & BYOVD Attack Flows</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2332;
+    --border: #1e2d3d;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --red: #ef4444;
+    --red-dim: rgba(239,68,68,0.15);
+    --amber: #f59e0b;
+    --amber-dim: rgba(245,158,11,0.12);
+    --cyan: #06b6d4;
+    --cyan-dim: rgba(6,182,212,0.12);
+    --green: #22c55e;
+    --green-dim: rgba(34,197,94,0.12);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167,139,250,0.12);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    padding: 40px 24px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+
+  .subtitle {
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 48px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-title .badge {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .flow-section {
+    margin-bottom: 56px;
+  }
+
+  /* Flow diagram */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+
+  .flow-step {
+    display: flex;
+    align-items: stretch;
+    min-height: 72px;
+  }
+
+  .step-number {
+    width: 48px;
+    min-width: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+  }
+
+  .step-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    z-index: 1;
+    flex-shrink: 0;
+    margin-top: 16px;
+  }
+
+  .step-line {
+    width: 2px;
+    flex: 1;
+    margin-top: 4px;
+  }
+
+  .step-content {
+    flex: 1;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin: 4px 0 4px 12px;
+    border-left: 3px solid;
+  }
+
+  .step-label {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .step-desc {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.5;
+  }
+
+  .step-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: rgba(0,0,0,0.3);
+    padding: 6px 10px;
+    border-radius: 4px;
+    margin-top: 6px;
+    color: var(--cyan);
+    overflow-x: auto;
+  }
+
+  /* UAC colors */
+  .uac .step-dot { background: var(--amber-dim); color: var(--amber); border: 2px solid var(--amber); }
+  .uac .step-line { background: linear-gradient(to bottom, var(--amber), transparent); }
+  .uac .step-content { background: var(--surface); border-color: var(--amber); }
+  .uac .step-label { color: var(--amber); }
+
+  .uac .step-danger .step-dot { background: var(--red-dim); color: var(--red); border-color: var(--red); }
+  .uac .step-danger .step-line { background: linear-gradient(to bottom, var(--red), transparent); }
+  .uac .step-danger .step-content { background: rgba(239,68,68,0.05); border-color: var(--red); }
+  .uac .step-danger .step-label { color: var(--red); }
+
+  /* BYOVD colors */
+  .byovd .step-dot { background: var(--purple-dim); color: var(--purple); border: 2px solid var(--purple); }
+  .byovd .step-line { background: linear-gradient(to bottom, var(--purple), transparent); }
+  .byovd .step-content { background: var(--surface); border-color: var(--purple); }
+  .byovd .step-label { color: var(--purple); }
+
+  .byovd .step-danger .step-dot { background: var(--red-dim); color: var(--red); border-color: var(--red); }
+  .byovd .step-danger .step-line { background: linear-gradient(to bottom, var(--red), transparent); }
+  .byovd .step-danger .step-content { background: rgba(239,68,68,0.05); border-color: var(--red); }
+  .byovd .step-danger .step-label { color: var(--red); }
+
+  /* Result box */
+  .result-box {
+    margin-top: 8px;
+    margin-left: 60px;
+    padding: 14px 18px;
+    border-radius: 8px;
+    border: 1px dashed;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .result-box.danger {
+    border-color: var(--red);
+    background: var(--red-dim);
+    color: var(--red);
+  }
+
+  /* Comparison table */
+  .compare-section {
+    margin-top: 16px;
+  }
+
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .compare-card {
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 20px;
+    border: 1px solid var(--border);
+  }
+
+  .compare-card h3 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .compare-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+
+  .compare-item:last-child { border-bottom: none; }
+
+  .compare-item .label { color: var(--muted); }
+  .compare-item .value { font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+
+  /* Defense box */
+  .defense-section {
+    margin-top: 48px;
+    background: var(--green-dim);
+    border: 1px solid rgba(34,197,94,0.3);
+    border-radius: 10px;
+    padding: 24px;
+  }
+
+  .defense-section h2 {
+    color: var(--green);
+    font-size: 16px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .defense-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .defense-item {
+    background: rgba(0,0,0,0.2);
+    border-radius: 6px;
+    padding: 12px;
+  }
+
+  .defense-item .title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 4px;
+  }
+
+  .defense-item .desc {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  @media (max-width: 640px) {
+    .compare-grid, .defense-grid { grid-template-columns: 1fr; }
+    body { padding: 24px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Privilege Escalation Attack Flows</h1>
+  <p class="subtitle">// educational reference — defensive security</p>
+
+  <!-- UAC BYPASS -->
+  <div class="flow-section">
+    <div class="section-title">
+      UAC Bypass via Auto-Elevation Abuse
+      <span class="badge" style="background:var(--amber-dim);color:var(--amber);">PRIVILEGE ESCALATION</span>
+    </div>
+
+    <div class="flow uac">
+      <div class="flow-step">
+        <div class="step-number">
+          <div class="step-dot">1</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-content">
+          <div class="step-label">Check Elevation Status</div>
+          <div class="step-desc">Query process token to determine if already running as admin</div>
+          <div class="step-code">OpenProcessToken → GetTokenInformation(TokenElevation)</div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-number">
+          <div class="step-dot">2</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-content">
+          <div class="step-label">Hijack Registry Key</div>
+          <div class="step-desc">Write to HKCU\Software\Classes\ to redirect a trusted binary's command lookup</div>
+          <div class="step-code">HKCU\...\Shell\Open\Command → (Default) = "C:\malware.exe"</div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-number">
+          <div class="step-dot">3</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-content">
+          <div class="step-label">Set DelegateExecute = ""</div>
+          <div class="step-desc">Empty DelegateExecute forces COM to use the Shell\Open\Command path instead of the real handler</div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-number">
+          <div class="step-dot">4</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-content">
+          <div class="step-label">Trigger Auto-Elevating Binary</div>
+          <div class="step-desc">Launch a Microsoft-signed binary (e.g. slui.exe, fodhelper.exe) that auto-elevates without UAC prompt</div>
+          <div class="step-code">ShellExecuteW("slui.exe") → auto-elevates → reads hijacked registry</div>
+        </div>
+      </div>
+
+      <div class="flow-step step-danger">
+        <div class="step-number">
+          <div class="step-dot">5</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-content">
+          <div class="step-label">Payload Executes as Admin</div>
+          <div class="step-desc">The trusted binary follows the hijacked registry path and launches the attacker's executable with full admin privileges — no UAC dialog shown</div>
+        </div>
+      </div>
+    </div>
+    <div class="result-box danger">⚠ Result: Attacker code runs with admin privileges, UAC completely bypassed</div>
+  </div>
+
+  <!-- BYOVD -->
+  <div class="flow-section">
+    <div class="section-title">
+      BYOVD — Bring Your Own Vulnerable Driver
+      <span class="badge" style="background:var(--purple-dim);color:var(--purple);">KERNEL EXPLOITATION</span>
+    </div>
+
+    <div class="flow byovd">
+      <div class="flow-step">
+        <div class="step-number">
+          <div class="step-dot">1</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-content">
+          <div class="step-label">Obtain Admin Privileges</div>
+          <div class="step-desc">Attacker already has admin access (e.g. via UAC bypass, credential theft, or social engineering)</div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-number">
+          <div class="step-dot">2</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-content">
+          <div class="step-label">Drop Legitimate Signed Driver</div>
+          <div class="step-desc">Install a known-vulnerable but validly signed kernel driver onto the system. It passes signature verification because it has a real certificate.</div>
+          <div class="step-code">sc create vuln_driver binPath= "C:\path\to\driver.sys" type= kernel</div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-number">
+          <div class="step-dot">3</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-content">
+          <div class="step-label">Load Driver into Kernel</div>
+          <div class="step-desc">Start the driver service. Windows allows it because the driver is properly signed by a trusted vendor.</div>
+          <div class="step-code">sc start vuln_driver → loaded into Ring 0 (kernel space)</div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-number">
+          <div class="step-dot">4</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-content">
+          <div class="step-label">Exploit Driver Vulnerability</div>
+          <div class="step-desc">Send crafted IOCTL calls to the driver to trigger a vulnerability (arbitrary read/write, code execution in kernel)</div>
+          <div class="step-code">DeviceIoControl(hDevice, IOCTL_CODE, ...) → arbitrary kernel R/W</div>
+        </div>
+      </div>
+
+      <div class="flow-step step-danger">
+        <div class="step-number">
+          <div class="step-dot">5</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-content">
+          <div class="step-label">Disable Security & Gain Kernel Access</div>
+          <div class="step-desc">Use kernel R/W to disable EDR/AV by patching callbacks, removing hooks, or killing protected processes. Full system compromise at Ring 0.</div>
+        </div>
+      </div>
+    </div>
+    <div class="result-box danger">⚠ Result: Kernel-level access, security tools disabled, full system compromise</div>
+  </div>
+
+  <!-- Comparison -->
+  <div class="compare-section">
+    <div class="compare-grid">
+      <div class="compare-card">
+        <h3><span style="color:var(--amber)">●</span> UAC Bypass</h3>
+        <div class="compare-item"><span class="label">Privilege Level</span><span class="value" style="color:var(--amber)">User → Admin</span></div>
+        <div class="compare-item"><span class="label">Ring Level</span><span class="value">Ring 3 (User)</span></div>
+        <div class="compare-item"><span class="label">Requires Admin</span><span class="value">No</span></div>
+        <div class="compare-item"><span class="label">Attack Surface</span><span class="value">Registry + COM</span></div>
+        <div class="compare-item"><span class="label">Persistence</span><span class="value">Low</span></div>
+        <div class="compare-item"><span class="label">Detection</span><span class="value">Medium</span></div>
+      </div>
+      <div class="compare-card">
+        <h3><span style="color:var(--purple)">●</span> BYOVD</h3>
+        <div class="compare-item"><span class="label">Privilege Level</span><span class="value" style="color:var(--purple)">Admin → Kernel</span></div>
+        <div class="compare-item"><span class="label">Ring Level</span><span class="value">Ring 0 (Kernel)</span></div>
+        <div class="compare-item"><span class="label">Requires Admin</span><span class="value">Yes</span></div>
+        <div class="compare-item"><span class="label">Attack Surface</span><span class="value">Signed Drivers</span></div>
+        <div class="compare-item"><span class="label">Persistence</span><span class="value">High</span></div>
+        <div class="compare-item"><span class="label">Detection</span><span class="value">Hard</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Defenses -->
+  <div class="defense-section">
+    <h2>🛡 Defensive Mitigations</h2>
+    <div class="defense-grid">
+      <div class="defense-item">
+        <div class="title">UAC → Always Notify</div>
+        <div class="desc">Set UAC to "Always notify" to prevent silent auto-elevation of trusted binaries</div>
+      </div>
+      <div class="defense-item">
+        <div class="title">WDAC / Driver Blocklist</div>
+        <div class="desc">Use Microsoft's Vulnerable Driver Blocklist and WDAC policies to prevent known-vulnerable drivers from loading</div>
+      </div>
+      <div class="defense-item">
+        <div class="title">Monitor Registry Keys</div>
+        <div class="desc">Alert on writes to Shell\Open\Command under HKCU\Software\Classes\ for common hijack targets</div>
+      </div>
+      <div class="defense-item">
+        <div class="title">HVCI / Secure Boot</div>
+        <div class="desc">Hypervisor-protected Code Integrity prevents unsigned/vulnerable kernel code from executing</div>
+      </div>
+      <div class="defense-item">
+        <div class="title">Least Privilege</div>
+        <div class="desc">Run users as standard accounts. UAC bypass is irrelevant if the account isn't in the Administrators group</div>
+      </div>
+      <div class="defense-item">
+        <div class="title">EDR with Kernel Telemetry</div>
+        <div class="desc">Deploy EDR that monitors driver loads, IOCTL patterns, and kernel callback tampering</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
