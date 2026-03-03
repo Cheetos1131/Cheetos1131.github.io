@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROGUEONE Implant — Architecture & Analysis</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Sora:wght@300;400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #06080c;
+    --bg2: #0c1018;
+    --surface: #10151f;
+    --surface2: #161d2b;
+    --surface3: #1c2537;
+    --border: #1e2a3a;
+    --text: #cdd6e4;
+    --text-bright: #eaf0f9;
+    --muted: #4a5a72;
+    --red: #ff4d5a;
+    --red-glow: rgba(255,77,90,0.2);
+    --orange: #ff8b3e;
+    --orange-glow: rgba(255,139,62,0.15);
+    --yellow: #ffd93d;
+    --yellow-glow: rgba(255,217,61,0.12);
+    --blue: #4dabf7;
+    --blue-glow: rgba(77,171,247,0.12);
+    --violet: #b197fc;
+    --violet-glow: rgba(177,151,252,0.12);
+    --green: #51cf66;
+    --green-glow: rgba(81,207,102,0.12);
+    --teal: #38d9a9;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Sora', sans-serif;
+    overflow-x: hidden;
+  }
+
+  /* Noise overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .page { max-width: 1000px; margin: 0 auto; padding: 60px 32px 80px; }
+
+  /* Header */
+  .header { margin-bottom: 64px; text-align: center; }
+
+  .header-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 16px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.1s;
+  }
+
+  .header h1 {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    color: var(--text-bright);
+    line-height: 1.1;
+    margin-bottom: 12px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.2s;
+  }
+
+  .header h1 span { color: var(--blue); }
+
+  .header-sub {
+    font-size: 15px;
+    color: var(--muted);
+    font-weight: 400;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.3s;
+  }
+
+  /* Stage card */
+  .stage {
+    position: relative;
+    margin-bottom: 48px;
+    opacity: 0;
+    animation: fadeUp 0.7s ease forwards;
+  }
+
+  .stage:nth-child(1) { animation-delay: 0.5s; }
+  .stage:nth-child(2) { animation-delay: 0.65s; }
+  .stage:nth-child(3) { animation-delay: 0.8s; }
+  .stage:nth-child(4) { animation-delay: 0.95s; }
+  .stage:nth-child(5) { animation-delay: 1.1s; }
+
+  .stage-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .stage-num {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .stage-title-group { flex: 1; }
+
+  .stage-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-bright);
+    letter-spacing: -0.3px;
+  }
+
+  .stage-subtitle {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .stage-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+
+  .stage-body {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    margin-left: 22px;
+    border-left: 3px solid;
+    position: relative;
+  }
+
+  .stage-body::before {
+    content: '';
+    position: absolute;
+    top: -17px;
+    left: -2px;
+    width: 3px;
+    height: 17px;
+  }
+
+  /* Flow steps inside card */
+  .flow-steps { display: flex; flex-direction: column; gap: 14px; }
+
+  .fstep {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .fstep-icon {
+    width: 32px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .fstep-text {
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .fstep-text strong { color: var(--text-bright); font-weight: 600; }
+
+  .code-inline {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    background: rgba(0,0,0,0.4);
+    padding: 2px 7px;
+    border-radius: 4px;
+    color: var(--teal);
+    white-space: nowrap;
+  }
+
+  .key-insight {
+    margin-top: 18px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.6;
+    border-left: 3px solid;
+  }
+
+  .key-insight .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  /* Stage color themes */
+  .stage-blue .stage-num { background: var(--blue-glow); color: var(--blue); border: 2px solid var(--blue); }
+  .stage-blue .stage-tag { background: var(--blue-glow); color: var(--blue); }
+  .stage-blue .stage-body { border-left-color: var(--blue); }
+  .stage-blue .stage-body::before { background: var(--blue); }
+  .stage-blue .fstep-icon { background: var(--blue-glow); color: var(--blue); }
+  .stage-blue .key-insight { background: var(--blue-glow); border-left-color: var(--blue); }
+  .stage-blue .key-insight .label { color: var(--blue); }
+
+  .stage-orange .stage-num { background: var(--orange-glow); color: var(--orange); border: 2px solid var(--orange); }
+  .stage-orange .stage-tag { background: var(--orange-glow); color: var(--orange); }
+  .stage-orange .stage-body { border-left-color: var(--orange); }
+  .stage-orange .stage-body::before { background: var(--orange); }
+  .stage-orange .fstep-icon { background: var(--orange-glow); color: var(--orange); }
+  .stage-orange .key-insight { background: var(--orange-glow); border-left-color: var(--orange); }
+  .stage-orange .key-insight .label { color: var(--orange); }
+
+  .stage-red .stage-num { background: var(--red-glow); color: var(--red); border: 2px solid var(--red); }
+  .stage-red .stage-tag { background: var(--red-glow); color: var(--red); }
+  .stage-red .stage-body { border-left-color: var(--red); }
+  .stage-red .stage-body::before { background: var(--red); }
+  .stage-red .fstep-icon { background: var(--red-glow); color: var(--red); }
+  .stage-red .key-insight { background: var(--red-glow); border-left-color: var(--red); }
+  .stage-red .key-insight .label { color: var(--red); }
+
+  .stage-violet .stage-num { background: var(--violet-glow); color: var(--violet); border: 2px solid var(--violet); }
+  .stage-violet .stage-tag { background: var(--violet-glow); color: var(--violet); }
+  .stage-violet .stage-body { border-left-color: var(--violet); }
+  .stage-violet .stage-body::before { background: var(--violet); }
+  .stage-violet .fstep-icon { background: var(--violet-glow); color: var(--violet); }
+  .stage-violet .key-insight { background: var(--violet-glow); border-left-color: var(--violet); }
+  .stage-violet .key-insight .label { color: var(--violet); }
+
+  .stage-green .stage-num { background: var(--green-glow); color: var(--green); border: 2px solid var(--green); }
+  .stage-green .stage-tag { background: var(--green-glow); color: var(--green); }
+  .stage-green .stage-body { border-left-color: var(--green); }
+  .stage-green .stage-body::before { background: var(--green); }
+  .stage-green .fstep-icon { background: var(--green-glow); color: var(--green); }
+  .stage-green .key-insight { background: var(--green-glow); border-left-color: var(--green); }
+  .stage-green .key-insight .label { color: var(--green); }
+
+  /* Connector between stages */
+  .stage-connector {
+    width: 3px;
+    height: 24px;
+    margin: -24px 0 -24px 41px;
+    position: relative;
+    z-index: -1;
+  }
+
+  .stage-connector.c-blue { background: linear-gradient(to bottom, var(--blue), var(--orange)); }
+  .stage-connector.c-orange { background: linear-gradient(to bottom, var(--orange), var(--red)); }
+  .stage-connector.c-red { background: linear-gradient(to bottom, var(--red), var(--violet)); }
+  .stage-connector.c-violet { background: linear-gradient(to bottom, var(--violet), var(--green)); }
+
+  /* Architecture Grid */
+  .arch-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin-bottom: 48px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.4s;
+  }
+
+  .arch-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  
+  .arch-card-header {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    color: var(--teal);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+
+  .arch-card-body {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 64px;
+    text-align: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 1.4s;
+    padding: 24px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 700px) {
+    .page { padding: 32px 16px 60px; }
+    .header h1 { font-size: 28px; }
+    .arch-grid { grid-template-columns: 1fr; }
+    .stage-body { margin-left: 12px; padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="header">
+    <div class="header-label">Malware Architecture &bull; Educational Reference</div>
+    <h1>ROGUE<span>ONE</span> Implant</h1>
+    <p class="header-sub">Component Analysis &bull; Attack Chain Mapping &bull; Capabilities</p>
+  </div>
+
+  <div class="arch-grid">
+    <div class="arch-card">
+      <div class="arch-card-header">main.c / command.c</div>
+      <div class="arch-card-body">The core execution loop. Initializes C2 network connections and listens for commands. <span class="code-inline">CommandDispatcher</span> maps received TLV payloads to their respective handler functions (e.g., <span class="code-inline">CmdPs</span>, <span class="code-inline">CmdInject</span>).</div>
+    </div>
+    <div class="arch-card">
+      <div class="arch-card-header">network.c / protocol.c</div>
+      <div class="arch-card-body">Handles TCP socket initialization via Winsock. Implements a custom Type-Length-Value (TLV) protocol for structured C2 communication, sending and receiving dynamic byte arrays or UTF-8 strings.</div>
+    </div>
+  </div>
+
+  <div class="stage stage-blue">
+    <div class="stage-header">
+      <div class="stage-num">01</div>
+      <div class="stage-title-group">
+        <div class="stage-title">Reconnaissance & Discovery</div>
+        <div class="stage-subtitle">system.c &bull; process.c &bull; module.c &bull; directory.c</div>
+      </div>
+      <div class="stage-tag">TA0007</div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">.C</div>
+          <div class="fstep-text"><strong>System Info (<span class="code-inline">system.c</span>)</strong> &mdash; Collects hostname, username, and architecture. Uses <span class="code-inline">CheckTokenMembership</span> to determine if the implant is running in an elevated context.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">.C</div>
+          <div class="fstep-text"><strong>Process Enum (<span class="code-inline">process.c</span>)</strong> &mdash; Implements both standard API (<span class="code-inline">CreateToolhelp32Snapshot</span>) and undocumented NTAPI (<span class="code-inline">NtQuerySystemInformation</span>) techniques to list running processes, masking the enumeration from basic API hooks.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">.C</div>
+          <div class="fstep-text"><strong>Module Enum (<span class="code-inline">module.c</span>)</strong> &mdash; Maps DLLs loaded into a process. The NTAPI version reads the target's Process Environment Block (PEB) directly via <span class="code-inline">NtQueryInformationProcess</span> and traverses the <span class="code-inline">InLoadOrderModuleList</span>.</div>
+        </div>
+      </div>
+      <div class="key-insight">
+        <div class="label">Attacker Usage</div>
+        Operators use these files to map the target environment, identify security products, and find suitable target processes (like explorer.exe) for subsequent shellcode injection.
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-connector c-blue"></div>
+
+  <div class="stage stage-orange">
+    <div class="stage-header">
+      <div class="stage-num">02</div>
+      <div class="stage-title-group">
+        <div class="stage-title">Import Address Table (IAT) Parsing</div>
+        <div class="stage-subtitle">iat.c &bull; Advanced Process Inspection</div>
+      </div>
+      <div class="stage-tag">T1057</div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">.C</div>
+          <div class="fstep-text"><strong>Read Remote Memory</strong> &mdash; Uses <span class="code-inline">NtQueryInformationProcess</span> to locate the remote PEB and <span class="code-inline">ReadProcessMemory</span> to read the remote process's <span class="code-inline">ImageBaseAddress</span>.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">.C</div>
+          <div class="fstep-text"><strong>Parse PE Headers</strong> &mdash; Reads the DOS Header and NT Headers from the remote process memory to locate the <span class="code-inline">IMAGE_DIRECTORY_ENTRY_IMPORT</span>.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">.C</div>
+          <div class="fstep-text"><strong>Extract Functions</strong> &mdash; Iterates through the <span class="code-inline">IMAGE_IMPORT_DESCRIPTOR</span> structures to list every DLL and function (by name or ordinal) the target process imports.</div>
+        </div>
+      </div>
+      <div class="key-insight">
+        <div class="label">Attacker Usage</div>
+        IAT enumeration allows an implant to inspect a running process to see what capabilities it has loaded. This helps identify processes that might have handles to sensitive resources or confirm if a process is hooked by an EDR (by looking for EDR DLLs injected into the IAT).
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-connector c-orange"></div>
+
+  <div class="stage stage-red">
+    <div class="stage-header">
+      <div class="stage-num">03</div>
+      <div class="stage-title-group">
+        <div class="stage-title">Remote Shellcode Execution</div>
+        <div class="stage-subtitle">hollower.c &bull; Process Hollowing Technique</div>
+      </div>
+      <div class="stage-tag">T1055.012</div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">.C</div>
+          <div class="fstep-text"><strong>Parent PID Spoofing</strong> &mdash; Finds <span class="code-inline">explorer.exe</span> and uses <span class="code-inline">UpdateProcThreadAttribute</span> to spawn <span class="code-inline">notepad.exe</span> in a suspended state, making it appear as a legitimate child of Explorer.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">.C</div>
+          <div class="fstep-text"><strong>Locate Entry Point</strong> &mdash; Queries the suspended process's PEB to find the image base, reads the PE headers, and calculates the exact memory address of the executable's Entry Point.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">.C</div>
+          <div class="fstep-text"><strong>Write & Execute</strong> &mdash; Uses <span class="code-inline">WriteProcessMemory</span> to overwrite the legitimate <span class="code-inline">notepad.exe</span> Entry Point with the operator-provided raw shellcode, then calls <span class="code-inline">ResumeThread</span> to execute the malicious payload.</div>
+        </div>
+      </div>
+      <div class="key-insight">
+        <div class="label">Attacker Usage</div>
+        Process hollowing allows the implant to run post-exploitation payloads (like Mimikatz, Cobalt Strike beacons, or lateral movement tools) entirely in memory inside a seemingly benign Windows process, evading basic process-level monitoring.
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-connector c-red"></div>
+
+  <div class="stage stage-violet">
+    <div class="stage-header">
+      <div class="stage-num">04</div>
+      <div class="stage-title-group">
+        <div class="stage-title">Privilege Escalation</div>
+        <div class="stage-subtitle">uac.c &bull; Auto-Elevation Bypass</div>
+      </div>
+      <div class="stage-tag">T1548.002</div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">.C</div>
+          <div class="fstep-text"><strong>Registry Poisoning</strong> &mdash; Writes the implant's current executable path to <span class="code-inline">HKCU\Software\Classes\Launcher.SystemSettings\Shell\Open\Command</span>.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">.C</div>
+          <div class="fstep-text"><strong>Trigger Execution</strong> &mdash; Uses <span class="code-inline">ShellExecuteW</span> to launch <span class="code-inline">slui.exe</span> (a trusted Windows binary).</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">.C</div>
+          <div class="fstep-text"><strong>Bypass Realized</strong> &mdash; Because <span class="code-inline">slui.exe</span> auto-elevates, it reads the hijacked HKCU registry key and launches the implant as High Integrity (Administrator) without prompting the user.</div>
+        </div>
+      </div>
+      <div class="key-insight">
+        <div class="label">Attacker Usage</div>
+        If the initial compromise yields a standard user context, this module is executed to silently escalate privileges to Administrator, unlocking the ability to dump credentials, tamper with the OS, or load kernel drivers.
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-connector c-violet"></div>
+
+  <div class="stage stage-green">
+    <div class="stage-header">
+      <div class="stage-num">05</div>
+      <div class="stage-title-group">
+        <div class="stage-title">Defense Evasion via BYOVD</div>
+        <div class="stage-subtitle">driver.c &bull; Bring Your Own Vulnerable Driver</div>
+      </div>
+      <div class="stage-tag">T1562.001</div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">.C</div>
+          <div class="fstep-text"><strong>Driver Dropper</strong> &mdash; Writes a legitimately signed but vulnerable driver (<span class="code-inline">MicrosoftUpdate11.01.sys</span>) to disk.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">.C</div>
+          <div class="fstep-text"><strong>Kernel Initialization</strong> &mdash; Assumes the driver was loaded via a service creation (requires Admin, gained in previous step). Opens a handle to <span class="code-inline">\\.\IMFForceDelete123</span>.</div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">.C</div>
+          <div class="fstep-text"><strong>Arbitrary Deletion</strong> &mdash; Sends <span class="code-inline">DeviceIoControl</span> requests (<span class="code-inline">0x8016E000</span>) to the driver, passing paths to AV/EDR files. The driver deletes them from Ring 0, bypassing user-mode file locks and protections.</div>
+        </div>
+      </div>
+      <div class="key-insight">
+        <div class="label">Attacker Usage</div>
+        Used as a heavy-handed approach to neutralize endpoint security. By leveraging a signed driver from a vendor (like IObit), Windows allows the kernel code to execute, which the implant then abuses to cripple defensive software blindly.
+      </div>
+    </div>
+  </div>
+
+  <div class="arch-grid" style="margin-top: 56px;">
+    <div class="arch-card" style="border-color: var(--green);">
+      <div class="arch-card-header" style="color: var(--green);">// Defense & Detection Mitigations</div>
+      <div class="arch-card-body" style="margin-bottom: 12px;">
+        <strong>Network Detections:</strong> Look for raw TCP connections (non-HTTP/S) communicating via structured 8-byte headers (TLV format), specifically defaulting to port 9001.
+      </div>
+      <div class="arch-card-body" style="margin-bottom: 12px;">
+        <strong>Behavioral Analytics:</strong> Alert on instances of <span class="code-inline">notepad.exe</span> being spawned with the <span class="code-inline">CREATE_SUSPENDED</span> flag, especially if the parent process is artificially spoofed to be <span class="code-inline">explorer.exe</span>.
+      </div>
+      <div class="arch-card-body">
+        <strong>Registry & Driver Monitoring:</strong> Alert on any modifications to <span class="code-inline">HKCU\Software\Classes\Launcher.SystemSettings\Shell\Open\Command</span>. Utilize Microsoft's Vulnerable Driver Blocklist to stop <span class="code-inline">IMFForceDelete.sys</span> from loading into the kernel.
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Defensive security reference &bull; For threat hunting &amp; detection engineering
+  </div>
+
+</div>
+
+</body>
+</html>

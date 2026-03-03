@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROGUEONE Implant — Advanced Threat Analysis & Deep Dive</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Sora:wght@300;400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #06080c;
+    --bg2: #0c1018;
+    --surface: #10151f;
+    --surface2: #161d2b;
+    --border: #1e2a3a;
+    --text: #cdd6e4;
+    --text-bright: #eaf0f9;
+    --muted: #64748b;
+    --red: #ef4444;
+    --red-glow: rgba(239, 68, 68, 0.15);
+    --orange: #f59e0b;
+    --orange-glow: rgba(245, 158, 11, 0.15);
+    --cyan: #06b6d4;
+    --cyan-glow: rgba(6, 182, 212, 0.15);
+    --blue: #3b82f6;
+    --blue-glow: rgba(59, 130, 246, 0.15);
+    --purple: #8b5cf6;
+    --purple-glow: rgba(139, 92, 246, 0.15);
+    --green: #22c55e;
+    --green-glow: rgba(34, 197, 94, 0.15);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Sora', sans-serif;
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 60px 32px 100px; }
+
+  /* Header */
+  .header { margin-bottom: 72px; text-align: center; }
+  .header-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--cyan);
+    margin-bottom: 16px;
+  }
+  .header h1 {
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    color: var(--text-bright);
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+  .header h1 span { color: var(--purple); }
+  .header p { color: var(--muted); font-size: 16px; max-width: 600px; margin: 0 auto; }
+
+  /* Architecture Overview Grid */
+  .arch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-bottom: 64px;
+  }
+  .arch-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    transition: all 0.3s ease;
+  }
+  .arch-card:hover { border-color: var(--cyan); transform: translateY(-2px); }
+  .arch-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .arch-title .badge {
+    background: var(--cyan-glow);
+    color: var(--cyan);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+  }
+  .arch-desc { font-size: 13px; color: var(--muted); }
+
+  /* Attack Stages */
+  .stage {
+    position: relative;
+    margin-bottom: 60px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  
+  .stage-header {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: rgba(0,0,0,0.2);
+  }
+
+  .stage-num {
+    width: 54px;
+    height: 54px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .stage-title-group { flex: 1; }
+  .stage-title { font-size: 22px; font-weight: 700; color: var(--text-bright); margin-bottom: 4px; }
+  .stage-subtitle { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+  .stage-files {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-weight: 600;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+
+  .stage-body { padding: 32px; display: grid; grid-template-columns: 3fr 2fr; gap: 32px; }
+
+  .flow-steps { display: flex; flex-direction: column; gap: 20px; }
+  .fstep { display: flex; align-items: flex-start; gap: 16px; }
+  .fstep-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+  .fstep-text { flex: 1; font-size: 14px; color: var(--text); }
+  .fstep-text strong { color: var(--text-bright); display: block; margin-bottom: 4px; }
+  
+  .code-inline {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: rgba(0,0,0,0.4);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--text-bright);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .code-block {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: #000;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    color: #a8b2c1;
+    overflow-x: auto;
+    line-height: 1.5;
+  }
+  .code-comment { color: #6272a4; }
+  .code-func { color: #50fa7b; }
+  .code-type { color: #8be9fd; }
+  .code-string { color: #f1fa8c; }
+
+  .insight-panel {
+    background: rgba(0,0,0,0.2);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .insight-item { font-size: 13px; }
+  .insight-item .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  /* Stage Color Themes */
+  .theme-blue .stage-num { background: var(--blue-glow); color: var(--blue); border: 1px solid var(--blue); }
+  .theme-blue .stage-header { border-bottom-color: rgba(59, 130, 246, 0.3); }
+  .theme-blue .insight-item .label { color: var(--blue); }
+  
+  .theme-purple .stage-num { background: var(--purple-glow); color: var(--purple); border: 1px solid var(--purple); }
+  .theme-purple .stage-header { border-bottom-color: rgba(139, 92, 246, 0.3); }
+  .theme-purple .insight-item .label { color: var(--purple); }
+
+  .theme-orange .stage-num { background: var(--orange-glow); color: var(--orange); border: 1px solid var(--orange); }
+  .theme-orange .stage-header { border-bottom-color: rgba(245, 158, 11, 0.3); }
+  .theme-orange .insight-item .label { color: var(--orange); }
+
+  .theme-red .stage-num { background: var(--red-glow); color: var(--red); border: 1px solid var(--red); }
+  .theme-red .stage-header { border-bottom-color: rgba(239, 68, 68, 0.3); }
+  .theme-red .insight-item .label { color: var(--red); }
+
+  .theme-cyan .stage-num { background: var(--cyan-glow); color: var(--cyan); border: 1px solid var(--cyan); }
+  .theme-cyan .stage-header { border-bottom-color: rgba(6, 182, 212, 0.3); }
+  .theme-cyan .insight-item .label { color: var(--cyan); }
+
+  /* Detection Matrix */
+  .mitre-section { margin-top: 80px; }
+  .section-title { font-size: 24px; font-weight: 700; color: var(--text-bright); margin-bottom: 24px; display: flex; align-items: center; gap: 12px; }
+  
+  .mitre-table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+  .mitre-table th, .mitre-table td { padding: 16px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .mitre-table th { font-family: 'JetBrains Mono', monospace; font-size: 11px; text-transform: uppercase; color: var(--muted); background: rgba(0,0,0,0.3); }
+  .mitre-table tr:last-child td { border-bottom: none; }
+  .tid-badge { background: var(--surface2); padding: 4px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--text-bright); }
+
+  @media (max-width: 900px) {
+    .stage-body { grid-template-columns: 1fr; }
+    .header h1 { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <div class="header-label">Threat Architecture Deep Dive</div>
+    <h1>ROGUE<span>ONE</span> Windows Implant</h1>
+    <p>A comprehensive analysis of a modular C/C++ implant, detailing its execution flow from basic C2 beaconing to kernel-level AV destruction and shellcode injection.</p>
+  </div>
+
+  <div class="arch-grid">
+    <div class="arch-card">
+      <div class="arch-title">Core Engine <span class="badge">main.c</span> <span class="badge">command.c</span></div>
+      <div class="arch-desc">The entry point of the implant. It uses <span class="code-inline">NetworkInit</span> to connect to the C2 server. It runs an infinite <span class="code-inline">while(RecvMessage(...))</span> loop, passing structured TLV payloads to <span class="code-inline">CommandDispatcher</span>, which maps numeric IDs to functions like <span class="code-inline">CmdRun</span> or <span class="code-inline">CmdPs</span>.</div>
+    </div>
+    <div class="arch-card">
+      <div class="arch-title">C2 Protocol <span class="badge">protocol.c</span> <span class="badge">network.c</span></div>
+      <div class="arch-desc">Implements a custom Type-Length-Value (TLV) protocol over raw TCP sockets. It guarantees message boundaries using an 8-byte header: a 4-byte <span class="code-inline">DWORD type</span> (Command ID) and a 4-byte <span class="code-inline">DWORD length</span>, followed by the dynamically allocated byte payload.</div>
+    </div>
+    <div class="arch-card">
+      <div class="arch-title">Debug & Error <span class="badge">debug.c</span> <span class="badge">error.c</span></div>
+      <div class="arch-desc">Provides custom heap tracking via <span class="code-inline">ImplantHeapAlloc</span> and <span class="code-inline">CheckHeapBalance</span> to prevent memory leaks during prolonged execution. <span class="code-inline">error.c</span> maps custom implant error codes to human-readable wide strings.</div>
+    </div>
+  </div>
+
+  <div class="stage theme-cyan">
+    <div class="stage-header">
+      <div class="stage-num">01</div>
+      <div class="stage-title-group">
+        <div class="stage-title">System Reconnaissance & API Evasion</div>
+        <div class="stage-subtitle">Discovering the host environment while avoiding user-land hooks.</div>
+      </div>
+      <div class="stage-files">system.c | process.c | module.c</div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">1</div>
+          <div class="fstep-text">
+            <strong>Privilege Discovery</strong>
+            Uses <span class="code-inline">CheckTokenMembership</span> to query if the implant holds an Administrator SID. This dictates whether the implant attempts UAC bypass or kernel driver loading.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">2</div>
+          <div class="fstep-text">
+            <strong>Evasive Process Enumeration (<span class="code-inline">CmdPsNt</span>)</strong>
+            Instead of standard APIs like <span class="code-inline">CreateToolhelp32Snapshot</span>, the implant resolves <span class="code-inline">NtQuerySystemInformation</span> from <span class="code-inline">ntdll.dll</span> dynamically to dump the <span class="code-inline">SystemProcessInformation</span> structure, bypassing EDRs that only hook high-level Win32 APIs.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">3</div>
+          <div class="fstep-text">
+            <strong>PEB Module Walking (<span class="code-inline">CmdModulesNt</span>)</strong>
+            To list loaded DLLs in a target process, it opens a handle, calls <span class="code-inline">NtQueryInformationProcess</span> to get the base of the PEB, and uses <span class="code-inline">ReadProcessMemory</span> to manually traverse the <span class="code-inline">InLoadOrderModuleList</span> linked list.
+          </div>
+        </div>
+      </div>
+      <div class="insight-panel">
+        <div class="insight-item">
+          <span class="label">Attacker Objective</span>
+          By manually walking the Process Environment Block (PEB) and using undocumented NTAPIs, the malware operator can map out security products (by identifying their injected DLLs) without triggering behavioral alerts common to <span class="code-inline">EnumProcessModules</span>.
+        </div>
+        <div class="code-block">
+<span class="code-comment">// Traversing the PEB_LDR_DATA</span>
+<span class="code-type">NTSTATUS</span> status = <span class="code-func">NtQueryInformationProcess</span>(hProc, ProcessBasicInformation, &pbi...);
+<span class="code-func">ReadProcessMemory</span>(hProc, peb.Ldr, &ldrData, <span class="code-keyword">sizeof</span>(PEB_LDR_DATA), &bytes);
+<span class="code-type">LIST_ENTRY</span>* nextEntry = ldrData.InLoadOrderModuleList.Flink;
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage theme-blue">
+    <div class="stage-header">
+      <div class="stage-num">02</div>
+      <div class="stage-title-group">
+        <div class="stage-title">Remote IAT Enumeration</div>
+        <div class="stage-subtitle">Parsing the Import Address Table of running processes.</div>
+      </div>
+      <div class="stage-files">iat.c</div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">1</div>
+          <div class="fstep-text">
+            <strong>Locating the Image Base</strong>
+            Reads the PEB of a remote process to find the <span class="code-inline">ImageBaseAddress</span> (offset 0x10 in x64 architecture).
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">2</div>
+          <div class="fstep-text">
+            <strong>Parsing PE Headers</strong>
+            Reads the remote <span class="code-inline">IMAGE_DOS_HEADER</span>, calculates the offset to the <span class="code-inline">IMAGE_NT_HEADERS64</span>, and extracts the Virtual Address (RVA) for the <span class="code-inline">IMAGE_DIRECTORY_ENTRY_IMPORT</span>.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">3</div>
+          <div class="fstep-text">
+            <strong>Walking Import Descriptors</strong>
+            Iterates through the remote <span class="code-inline">IMAGE_IMPORT_DESCRIPTOR</span> array. For each loaded DLL, it walks the <span class="code-inline">IMAGE_THUNK_DATA64</span> array to extract either the imported function name or its ordinal number, streaming this back to the C2.
+          </div>
+        </div>
+      </div>
+      <div class="insight-panel">
+        <div class="insight-item">
+          <span class="label">Attacker Objective</span>
+          IAT enumeration is a highly advanced recon technique. It allows an implant to statically analyze a running process in memory. Attackers use this to identify processes that import specific sensitive APIs (like crypto or credential APIs) or to find targets suitable for IAT hooking (replacing legitimate function pointers with malicious ones).
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage theme-purple">
+    <div class="stage-header">
+      <div class="stage-num">03</div>
+      <div class="stage-title-group">
+        <div class="stage-title">Process Hollowing & PPID Spoofing</div>
+        <div class="stage-subtitle">Executing arbitrary shellcode inside a spoofed host process.</div>
+      </div>
+      <div class="stage-files">hollower.c</div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">1</div>
+          <div class="fstep-text">
+            <strong>Parent Process Spoofing</strong>
+            The implant enumerates processes to find <span class="code-inline">explorer.exe</span>. It uses <span class="code-inline">InitializeProcThreadAttributeList</span> and <span class="code-inline">UpdateProcThreadAttribute</span> to set Explorer as the parent, then creates <span class="code-inline">notepad.exe</span> in a <span class="code-inline">CREATE_SUSPENDED</span> state.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">2</div>
+          <div class="fstep-text">
+            <strong>Dynamic Entry Point Resolution</strong>
+            It queries the suspended process to find its base address, reads its PE header remotely, and calculates the <span class="code-inline">AddressOfEntryPoint</span>.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">3</div>
+          <div class="fstep-text">
+            <strong>Injection & Execution</strong>
+            Uses <span class="code-inline">WriteProcessMemory</span> to overwrite the legitimate entry point instructions with the raw shellcode sent over the C2 socket. Finally, <span class="code-inline">ResumeThread</span> is called, executing the payload inside the context of <span class="code-inline">notepad.exe</span>.
+          </div>
+        </div>
+      </div>
+      <div class="insight-panel">
+        <div class="insight-item">
+          <span class="label">Defense Evasion Value</span>
+          PPID spoofing breaks process tree analysis (e.g., stopping analysts from seeing that the malicious implant spawned notepad). Process hollowing ensures the payload runs from a memory space backed by a Microsoft-signed executable, evading basic whitelisting.
+        </div>
+        <div class="code-block">
+<span class="code-comment">// PPID Spoofing Setup</span>
+<span class="code-func">UpdateProcThreadAttribute</span>(si.lpAttributeList, 0, 
+  PROC_THREAD_ATTRIBUTE_PARENT_PROCESS, &hExplorer, <span class="code-keyword">sizeof</span>(HANDLE), NULL, NULL);
+
+<span class="code-comment">// Spawn Suspended</span>
+<span class="code-func">CreateProcessA</span>(NULL, <span class="code-string">"notepad"</span>, NULL, NULL, FALSE, 
+  EXTENDED_STARTUPINFO_PRESENT | CREATE_SUSPENDED, NULL, NULL, &si.StartupInfo, &pi);
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage theme-orange">
+    <div class="stage-header">
+      <div class="stage-num">04</div>
+      <div class="stage-title-group">
+        <div class="stage-title">UAC Bypass via COM Hijacking</div>
+        <div class="stage-subtitle">Escalating from Standard User to High Integrity Administrator.</div>
+      </div>
+      <div class="stage-files">uac.c</div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">1</div>
+          <div class="fstep-text">
+            <strong>Registry Poisoning</strong>
+            The implant creates a registry key under <span class="code-inline">HKCU\Software\Classes\Launcher.SystemSettings\Shell\Open\Command</span>. It sets the default value to its own executable path and sets a <span class="code-inline">DelegateExecute</span> key to an empty string.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">2</div>
+          <div class="fstep-text">
+            <strong>Trigger Auto-Elevation</strong>
+            It calls <span class="code-inline">ShellExecuteW</span> on <span class="code-inline">C:\Windows\System32\slui.exe</span>. Because this binary is signed by Microsoft and its manifest requests auto-elevation, Windows grants it High Integrity without a UAC prompt.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">3</div>
+          <div class="fstep-text">
+            <strong>Execution Hijack</strong>
+            Upon launching, <span class="code-inline">slui.exe</span> queries the HKCU registry hive (which the attacker controls) to find its execution handler. It finds the poisoned path and executes the implant as an Administrator.
+          </div>
+        </div>
+      </div>
+      <div class="insight-panel">
+        <div class="insight-item">
+          <span class="label">Why it works</span>
+          UAC is designed as a convenience boundary, not a hard security boundary. Auto-elevating binaries inherently trust the current user's registry hive (HKCU) over the system hive (HKLM) when resolving COM objects or shell commands.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage theme-red">
+    <div class="stage-header">
+      <div class="stage-num">05</div>
+      <div class="stage-title-group">
+        <div class="stage-title">BYOVD (Bring Your Own Vulnerable Driver)</div>
+        <div class="stage-subtitle">Dropping a signed driver to forcibly blind or destroy AV/EDR.</div>
+      </div>
+      <div class="stage-files">driver.c</div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">1</div>
+          <div class="fstep-text">
+            <strong>Driver Deployment</strong>
+            If running as Admin, the implant writes an embedded driver array to <span class="code-inline">%TEMP%\MicrosoftUpdate11.01.sys</span>. This file is actually <span class="code-inline">IMFForceDelete.sys</span>, a legitimately signed component of IObit Malware Fighter.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">2</div>
+          <div class="fstep-text">
+            <strong>Kernel Initialization</strong>
+            Assuming the service was created, the implant opens a handle to the driver's device object: <span class="code-inline">\\.\IMFForceDelete123</span>.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">3</div>
+          <div class="fstep-text">
+            <strong>Arbitrary File Deletion (Ring 0)</strong>
+            The implant sends <span class="code-inline">DeviceIoControl</span> requests with the IOCTL <span class="code-inline">0x8016E000</span>, passing target paths like <span class="code-inline">\??\C:\Program Files\Windows Defender\MpCmdRun.exe</span>. The driver executes the deletion from Ring 0, entirely bypassing user-mode file locks and EDR self-protection mechanisms.
+          </div>
+        </div>
+      </div>
+      <div class="insight-panel">
+        <div class="insight-item">
+          <span class="label">Blind Spot Exploitation</span>
+          Many BYOVD attacks focus on patching kernel callbacks or terminating processes, which modern EDRs heavily monitor. Arbitrary file deletion from the kernel is highly destructive and often falls in a behavioral blind spot, causing the security product to silently fail on its next update or restart.
+        </div>
+        <div class="code-block">
+<span class="code-comment">// Sending the Force Delete IOCTL</span>
+<span class="code-type">BOOL</span> result = <span class="code-func">DeviceIoControl</span>(
+    hDriver,
+    <span class="code-keyword">0x8016E000</span>, <span class="code-comment">// IObit Force Delete IOCTL</span>
+    (LPVOID)full_path,
+    input_size, NULL, 0, &bytes_returned, NULL
+);
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mitre-section">
+    <div class="section-title">Detection & Mitigation Matrix</div>
+    <table class="mitre-table">
+      <thead>
+        <tr>
+          <th>Tactic / Technique</th>
+          <th>MITRE ID</th>
+          <th>Implant Capability</th>
+          <th>Detection Strategy / Log Source</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Defense Evasion</strong><br>Process Injection / Hollowing</td>
+          <td><span class="tid-badge">T1055.012</span></td>
+          <td><span class="code-inline">hollower.c</span> creates suspended <span class="code-inline">notepad.exe</span> with spoofed parent.</td>
+          <td>Monitor <span class="code-inline">Sysmon Event ID 8</span> (CreateRemoteThread) and <span class="code-inline">Event ID 1</span> (Process Creation) for child processes spawned with <span class="code-inline">CREATE_SUSPENDED</span> flags.</td>
+        </tr>
+        <tr>
+          <td><strong>Privilege Escalation</strong><br>Bypass User Account Control</td>
+          <td><span class="tid-badge">T1548.002</span></td>
+          <td><span class="code-inline">uac.c</span> hijacks <span class="code-inline">Launcher.SystemSettings</span> registry keys for <span class="code-inline">slui.exe</span>.</td>
+          <td>Monitor <span class="code-inline">Sysmon Event ID 12/13</span> (Registry Event) targeting <span class="code-inline">HKCU\Software\Classes\*\Shell\Open\Command</span>.</td>
+        </tr>
+        <tr>
+          <td><strong>Defense Evasion</strong><br>Exploitation for Privilege Escalation (BYOVD)</td>
+          <td><span class="tid-badge">T1068</span></td>
+          <td><span class="code-inline">driver.c</span> drops and interacts with <span class="code-inline">IMFForceDelete.sys</span>.</td>
+          <td>Implement WDAC with Microsoft's Recommended Driver Blocklist. Monitor <span class="code-inline">Sysmon Event ID 6</span> (Driver Loaded) for drivers loading from <span class="code-inline">%TEMP%</span>.</td>
+        </tr>
+        <tr>
+          <td><strong>Discovery</strong><br>Process Discovery</td>
+          <td><span class="tid-badge">T1057</span></td>
+          <td><span class="code-inline">iat.c</span> and <span class="code-inline">module.c</span> walk the PEB and remote memory structures.</td>
+          <td>Monitor <span class="code-inline">Sysmon Event ID 10</span> (ProcessAccess) for unusual processes requesting <span class="code-inline">PROCESS_VM_READ</span> | <span class="code-inline">PROCESS_QUERY_INFORMATION</span> on other running processes.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    ROGUEONE Implant Analysis &bull; Defensive Security Reference &bull; Threat Hunting & Detection Engineering
+  </div>
+
+</div>
+
+</body>
+</html>
