@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROGUEONE Implant — UAC & BYOVD Execution Flow</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Sora:wght@300;400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #06080c;
+    --bg2: #0c1018;
+    --surface: #10151f;
+    --surface2: #161d2b;
+    --border: #1e2a3a;
+    --text: #cdd6e4;
+    --text-bright: #eaf0f9;
+    --muted: #64748b;
+    --red: #ef4444;
+    --red-glow: rgba(239, 68, 68, 0.15);
+    --orange: #f59e0b;
+    --orange-glow: rgba(245, 158, 11, 0.15);
+    --cyan: #06b6d4;
+    --cyan-glow: rgba(6, 182, 212, 0.15);
+    --blue: #3b82f6;
+    --blue-glow: rgba(59, 130, 246, 0.15);
+    --purple: #8b5cf6;
+    --purple-glow: rgba(139, 92, 246, 0.15);
+    --green: #22c55e;
+    --green-glow: rgba(34, 197, 94, 0.15);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Sora', sans-serif;
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 60px 32px 100px; }
+
+  /* Header */
+  .header { margin-bottom: 72px; text-align: center; }
+  .header-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--cyan);
+    margin-bottom: 16px;
+  }
+  .header h1 {
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    color: var(--text-bright);
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+  .header h1 span { color: var(--orange); }
+  .header p { color: var(--muted); font-size: 16px; max-width: 600px; margin: 0 auto; }
+
+  /* Architecture Overview Grid */
+  .arch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-bottom: 64px;
+  }
+  .arch-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    transition: all 0.3s ease;
+  }
+  .arch-card:hover { border-color: var(--cyan); transform: translateY(-2px); }
+  .arch-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .arch-title .badge {
+    background: var(--cyan-glow);
+    color: var(--cyan);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+  }
+  .arch-desc { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  
+  .func-list { list-style: none; padding: 0; }
+  .func-list li {
+    font-size: 12px;
+    color: var(--text);
+    margin-bottom: 8px;
+    padding-left: 12px;
+    border-left: 2px solid var(--border);
+  }
+  .func-list li strong { font-family: 'JetBrains Mono', monospace; color: var(--cyan); }
+
+  /* Attack Stages */
+  .stage {
+    position: relative;
+    margin-bottom: 60px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  
+  .stage-header {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: rgba(0,0,0,0.2);
+  }
+
+  .stage-num {
+    width: 54px;
+    height: 54px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .stage-title-group { flex: 1; }
+  .stage-title { font-size: 22px; font-weight: 700; color: var(--text-bright); margin-bottom: 4px; }
+  .stage-subtitle { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+  .stage-files {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-weight: 600;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+
+  .stage-body { padding: 32px; display: grid; grid-template-columns: 3fr 2fr; gap: 32px; }
+
+  .flow-steps { display: flex; flex-direction: column; gap: 20px; }
+  .fstep { display: flex; align-items: flex-start; gap: 16px; }
+  .fstep-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+  .fstep-text { flex: 1; font-size: 14px; color: var(--text); }
+  .fstep-text strong { color: var(--text-bright); display: block; margin-bottom: 4px; font-family: 'JetBrains Mono', monospace; }
+  
+  .code-inline {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: rgba(0,0,0,0.4);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--text-bright);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .insight-panel {
+    background: rgba(0,0,0,0.2);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .insight-item { font-size: 13px; }
+  .insight-item .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  /* Stage Color Themes */
+  .theme-orange .stage-num { background: var(--orange-glow); color: var(--orange); border: 1px solid var(--orange); }
+  .theme-orange .stage-header { border-bottom-color: rgba(245, 158, 11, 0.3); }
+  .theme-orange .insight-item .label { color: var(--orange); }
+  .theme-orange .fstep-icon { border-color: var(--orange); color: var(--orange); }
+
+  .theme-purple .stage-num { background: var(--purple-glow); color: var(--purple); border: 1px solid var(--purple); }
+  .theme-purple .stage-header { border-bottom-color: rgba(139, 92, 246, 0.3); }
+  .theme-purple .insight-item .label { color: var(--purple); }
+  .theme-purple .fstep-icon { border-color: var(--purple); color: var(--purple); }
+
+  .theme-red .stage-num { background: var(--red-glow); color: var(--red); border: 1px solid var(--red); }
+  .theme-red .stage-header { border-bottom-color: rgba(239, 68, 68, 0.3); }
+  .theme-red .insight-item .label { color: var(--red); }
+  .theme-red .fstep-icon { border-color: var(--red); color: var(--red); }
+
+  @media (max-width: 900px) {
+    .stage-body { grid-template-columns: 1fr; }
+    .header h1 { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <div class="header-label">Threat Architecture Analysis</div>
+    <h1>ROGUE<span>ONE</span> Execution Flow</h1>
+    <p>Educational analysis detailing the function relationships and execution sequence for User Account Control (UAC) bypass and Bring Your Own Vulnerable Driver (BYOVD) operations.</p>
+  </div>
+
+  <div class="arch-grid">
+    <div class="arch-card">
+      <div class="arch-title">UAC Hijacking <span class="badge">uac.c</span></div>
+      <div class="arch-desc">Exploits auto-elevating Windows binaries via COM hijacking in the HKCU registry hive.</div>
+      <ul class="func-list">
+        <li><strong>is_elevated()</strong> Checks the process token to confirm current privileges.</li>
+        <li><strong>create_key()</strong> Writes the payload path and empty DelegateExecute to HKCU.</li>
+        <li><strong>run_as_admin()</strong> Triggers <code>slui.exe</code> via ShellExecuteW.</li>
+        <li><strong>bypass()</strong> Orchestrates the full UAC bypass sequence.</li>
+      </ul>
+    </div>
+    <div class="arch-card">
+      <div class="arch-title">Service Management <span class="badge">service.c</span></div>
+      <div class="arch-desc">Interfaces with the Windows Service Control Manager to register kernel drivers.</div>
+      <ul class="func-list">
+        <li><strong>service_exists()</strong> Queries the SCM to check if the driver service is already registered.</li>
+        <li><strong>start_kernel_service()</strong> Calls StartServiceW to load the driver.</li>
+        <li><strong>register_kernel_service()</strong> Uses CreateServiceW to register the <code>.sys</code> file as a <code>SERVICE_KERNEL_DRIVER</code>.</li>
+      </ul>
+    </div>
+    <div class="arch-card">
+      <div class="arch-title">Vulnerable Driver <span class="badge">driver.c</span></div>
+      <div class="arch-desc">Manages the extraction and IOCTL communication with the signed vulnerable driver.</div>
+      <ul class="func-list">
+        <li><strong>load()</strong> Writes embedded driver bytes to <code>%TEMP%\MicrosoftUpdate11.01.sys</code>.</li>
+        <li><strong>init()</strong> Obtains a handle to <code>\\.\IMFForceDelete123</code>.</li>
+        <li><strong>ForceDelete()</strong> Sends the <code>0x8016E000</code> IOCTL to forcefully delete files from Ring 0.</li>
+        <li><strong>close_driver()</strong> Cleans up the driver handle.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="stage theme-orange">
+    <div class="stage-header">
+      <div class="stage-num">01</div>
+      <div class="stage-title-group">
+        <div class="stage-title">UAC Bypass (Escalation to Admin)</div>
+        <div class="stage-subtitle">Triggering auto-elevation via Registry COM Hijacking</div>
+      </div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">1</div>
+          <div class="fstep-text">
+            <strong>bypass() &rarr; is_elevated()</strong>
+            The sequence begins by checking the current process integrity level. If it is already Administrator, this stage is skipped entirely.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">2</div>
+          <div class="fstep-text">
+            <strong>create_key() [DelegateExecute]</strong>
+            Writes an empty string to the <code>DelegateExecute</code> value under <code>HKCU\Software\Classes\Launcher.SystemSettings\Shell\Open\Command</code>, forcing COM fallback.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">3</div>
+          <div class="fstep-text">
+            <strong>create_key() [Default Value]</strong>
+            Retrieves the current executable path and writes it to the <code>(Default)</code> value of the same registry key.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">4</div>
+          <div class="fstep-text">
+            <strong>run_as_admin()</strong>
+            Executes <code>slui.exe</code>. Because it is an auto-elevating binary, it reads the poisoned HKCU hive and launches the implant executable as High Integrity (Admin).
+          </div>
+        </div>
+      </div>
+      <div class="insight-panel">
+        <div class="insight-item">
+          <span class="label">Transition</span>
+          The original low-privileged implant can now exit, as the newly spawned instance is running with full Administrator privileges, satisfying the prerequisites for Stage 2.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage theme-purple">
+    <div class="stage-header">
+      <div class="stage-num">02</div>
+      <div class="stage-title-group">
+        <div class="stage-title">Driver Deployment & Registration</div>
+        <div class="stage-subtitle">Dropping the payload and instructing the SCM to load it.</div>
+      </div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">5</div>
+          <div class="fstep-text">
+            <strong>load()</strong>
+            The elevated implant drops the embedded driver byte array to disk at <code>%TEMP%\MicrosoftUpdate11.01.sys</code>.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">6</div>
+          <div class="fstep-text">
+            <strong>register_kernel_service() &rarr; service_exists()</strong>
+            The implant queries the SCM to see if the disguised service name (<code>MicrosoftUpdate11.01</code>) is already registered.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">7</div>
+          <div class="fstep-text">
+            <strong>CreateServiceW()</strong>
+            If it does not exist, the implant calls <code>CreateServiceW</code> to register the newly dropped file as a kernel driver.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">8</div>
+          <div class="fstep-text">
+            <strong>start_kernel_service()</strong>
+            Executes the service, which loads the <code>IMFForceDelete.sys</code> driver into Ring 0. The OS allows this because the driver possesses a valid digital signature.
+          </div>
+        </div>
+      </div>
+      <div class="insight-panel">
+        <div class="insight-item">
+          <span class="label">Defense Evasion Context</span>
+          By masquerading as "MicrosoftUpdate11.01", the service attempts to blend in with normal system services. The driver drops to %TEMP% to avoid triggering strict permissions in System32\drivers.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage theme-red">
+    <div class="stage-header">
+      <div class="stage-num">03</div>
+      <div class="stage-title-group">
+        <div class="stage-title">Exploitation (Ring 0 Execution)</div>
+        <div class="stage-subtitle">Sending IOCTLs to perform arbitrary file deletion.</div>
+      </div>
+    </div>
+    <div class="stage-body">
+      <div class="flow-steps">
+        <div class="fstep">
+          <div class="fstep-icon">9</div>
+          <div class="fstep-text">
+            <strong>init()</strong>
+            The implant uses <code>CreateFileW</code> to open a read/write handle to the driver's device interface: <code>\\.\IMFForceDelete123</code>.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">10</div>
+          <div class="fstep-text">
+            <strong>ForceDelete()</strong>
+            The implant formats targeted AV/EDR paths (prepending <code>\??\</code>) and sends a <code>DeviceIoControl</code> request using IOCTL <code>0x8016E000</code>.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">11</div>
+          <div class="fstep-text">
+            <strong>Kernel Deletion</strong>
+            The vulnerable driver receives the IOCTL and deletes the specified files from the kernel context, completely bypassing user-mode file protections.
+          </div>
+        </div>
+        <div class="fstep">
+          <div class="fstep-icon">12</div>
+          <div class="fstep-text">
+            <strong>close_driver()</strong>
+            Closes the handle to the driver device object once the destruction loop is complete.
+          </div>
+        </div>
+      </div>
+      <div class="insight-panel">
+        <div class="insight-item">
+          <span class="label">Impact</span>
+          Security tools are physically removed from the disk while their services may still be running in memory, leading to an eventual crash or complete blinding of the endpoint's defensive capabilities.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
