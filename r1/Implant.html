@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RogueOne Implant Analysis</title>
+    <style>
+        /* Modern Vanilla CSS Variables */
+        :root {
+            --accent-blue: #23B0FF;
+            --accent-green: #78E2A0;
+            --accent-orange: #FFA86A;
+            --accent-purple: #aa60ff;
+            --accent-pink: #EE72F1;
+            --accent-red: #FF6266;
+            --accent-yellow: #dbd963;
+            --accent: var(--accent-green); /* Default accent for this page */
+            --background: color-mix(in srgb, var(--accent) 2%, #1D1E28 98%);
+            --accent-contrast-color: black;
+            --color: white;
+            --border-color: rgba(255, 255, 255, .1);
+        }
+
+        /* Fira Code Fallback (Using system Monospace for immediate rendering) */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Fira Code', Monaco, Consolas, Ubuntu Mono, monospace;
+            font-size: 1rem;
+            line-height: 1.54;
+            background-color: var(--background);
+            color: var(--color);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar { height: 6px; width: 6px; background-color: transparent; }
+        ::-webkit-scrollbar-thumb { background-color: #4a4d52; border: 1px solid #282a2d; border-radius: 2px; }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            padding: 40px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        /* Header Navigation Styles */
+        .header { display: flex; flex-direction: column; position: relative; margin-bottom: 40px;}
+        .header__logo {
+            display: flex; flex: 1 1 auto; column-gap: 2px;
+            border-right: var(--accent) 2px solid;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .header__logo:after {
+            content: '';
+            background: repeating-linear-gradient(90deg, transparent, transparent 8px, var(--accent) 8px, var(--accent) 10px);
+            display: block; width: 100%; right: 10px;
+        }
+        
+        .header-link {
+            display: flex; align-items: center; text-decoration: none;
+            background: var(--accent); color: var(--accent-contrast-color);
+            padding: 5px 10px; transition: 0.3s all ease;
+        }
+        .header-link:hover { background-color: color-mix(in srgb, var(--accent) 75%, black); }
+
+        /* Rainbow Math for Header Links */
+        .header__logo > a:nth-child(1) { --accent: var(--accent-pink); }
+        .header__logo > a:nth-child(2) { --accent: var(--accent-purple); }
+        .header__logo > a:nth-child(3) { --accent: var(--accent-blue); }
+        .header__logo > a:nth-child(4) { --accent: var(--accent-green); }
+
+        /* Typography & Layout */
+        h1, h2, h3 { color: var(--accent); line-height: 1.3; }
+        h1 { border-bottom: 3px dotted var(--accent); padding-bottom: 10px; margin-bottom: 5px; }
+        
+        p { margin-bottom: 20px; overflow-wrap: break-word; }
+
+        code {
+            background: color-mix(in srgb, var(--accent), transparent 92%);
+            color: color-mix(in srgb, var(--accent), white);
+            padding: 2px 4px; border-radius: 3px; font-size: 0.95rem;
+        }
+
+        pre {
+            background: #2a2a2a !important; padding: 20px 10px;
+            margin: 20px 0; overflow: auto;
+            border-left: 4px solid var(--accent);
+        }
+        pre code { background: none !important; color: #78E2A0; }
+
+        table { width: 100%; border-collapse: collapse; margin: 40px 0; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { color: var(--accent); border-bottom: 2px solid var(--accent); }
+        table tbody tr:nth-child(2n+1) { background-color: color-mix(in srgb, var(--accent) 2%, #ffffff05); }
+
+        .framed { border: 1px solid var(--accent); padding: 20px; margin: 20px 0; }
+        
+        .tags { color: color-mix(in srgb, var(--accent), transparent 30%); font-size: 0.9rem; margin-bottom: 30px; }
+        .divider { color: var(--accent); overflow: hidden; white-space: nowrap; margin: 20px 0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header class="header">
+        <div class="header__logo">
+            <a href="#" class="header-link" style="--accent: var(--accent-pink);">rogueone.exe</a>
+            <a href="#flow" class="header-link" style="--accent: var(--accent-purple);">execution_flow</a>
+            <a href="#modules" class="header-link" style="--accent: var(--accent-blue);">modules</a>
+            <a href="#crypto" class="header-link" style="--accent: var(--accent-green);">crypto</a>
+        </div>
+    </header>
+
+    <article class="post">
+        <h1>Source Code Analysis: RogueOne Implant</h1>
+        <div class="tags">
+            DATE: 2026-04-19 | TAGS: <code>c2</code> <code>malware-analysis</code> <code>windows-internals</code>
+        </div>
+
+        <p>The provided source code constitutes an advanced Windows C2 implant agent dubbed <strong>RogueOne</strong>. Designed to operate stealthily on a compromised host, the agent communicates over an AES-256 encrypted TCP socket using a custom Type-Length-Value (TLV) protocol. It possesses extensive capabilities including Bring-Your-Own-Vulnerable-Driver (BYOVD) exploitation, process hollowing, token theft, and UAC bypasses.</p>
+
+        <div class="divider">::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</div>
+
+        <h2 id="flow">1. General Program Flow</h2>
+        <p>The lifecycle of the implant is driven by <code>main.c</code> and <code>interactiveMain()</code>. It is designed to act both as a standalone executable and as an installable Windows Service.</p>
+        
+        <div class="framed">
+            <h3>Execution Chain</h3>
+            <ol>
+                <li><strong>Service vs. Console:</strong> <code>main()</code> immediately attempts to register as a Windows service using <code>StartServiceCtrlDispatcherW</code>. If it fails (indicating it was executed interactively by a user), it falls back to <code>InteractiveMain()</code>.</li>
+                <li><strong>Network Initialization:</strong> <code>NetworkInit()</code> is called to resolve the hardcoded C2 host/port and establish a TCP socket.</li>
+                <li><strong>Cryptographic Handshake:</strong> Over the plaintext socket, <code>CryptoHandshake()</code> executes an Elliptic Curve Diffie-Hellman (ECDH P-256) key exchange to derive a mutual 32-byte shared secret, subsequently hashed via SHA-256 to create the AES-CBC session key.</li>
+                <li><strong>Privilege Escalation check:</strong> If the implant detects it is running as an Administrator, it forcefully enables critical tokens: <code>SeDebugPrivilege</code>, <code>SeTakeOwnershipPrivilege</code>, <code>SeLoadDriverPrivilege</code>, and <code>SeImpersonatePrivilege</code>.</li>
+                <li><strong>C2 Loop:</strong> The agent enters an infinite <code>while(RecvMessage(...))</code> loop. It waits for TLV packets, decrypts them, parses the <code>CMD_ID</code>, and routes the payload to the appropriate handler in the <code>G_CommandTable</code> via <code>CommandDispatcher()</code>.</li>
+            </ol>
+        </div>
+
+        <div class="divider">::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</div>
+
+        <h2 id="modules">2. Detailed Module Breakdown</h2>
+
+        <h3>A. Protocol & Dispatch (<code>protocol.c</code> & <code>command.c</code>)</h3>
+        <p>The network protocol is purely custom. Every packet sent to and from the C2 utilizes a strict TLV (Type-Length-Value) architecture defined by the <code>TLV_MESSAGE</code> struct.</p>
+        <ul>
+            <li><strong>Header:</strong> 8 bytes total (4 bytes for <code>CMD_ID</code>, 4 bytes for payload Length).</li>
+            <li><strong>Chunking:</strong> Data larger than 1024 bytes (<code>CHUNK_SIZE</code>) is fragmented. An empty EOF packet (Length = 0) signals the end of a chunk stream.</li>
+            <li><strong>Dispatch:</strong> <code>command.c</code> maps <code>CMD_ID</code> integers (e.g., <code>CMD_PS</code>, <code>CMD_INJECT</code>) to specific C functions using the <code>G_CommandTable</code>.</li>
+        </ul>
+
+        <h3>B. Cryptography (<code>crypto.c</code> & <code>network.c</code>)</h3>
+        <p>The author elected to use native Windows CNG (Cryptography API: Next Generation) rather than embedding OpenSSL, significantly reducing the binary footprint and evading basic static signatures.</p>
+        <pre><code>// Wire format of encrypted frames:
+[4-byte LE Plaintext Length] + [16-byte IV] + [AES-256-CBC Ciphertext]</code></pre>
+        <p>After the initial ECDH handshake, <strong>all</strong> traffic passes through <code>NetworkSendAll</code> and <code>NetworkRecvAll</code>, which transparently wrap the underlying socket calls with PKCS#7 padded AES encryption.</p>
+
+        <h3>C. Evasion & Injection (<code>hollower.c</code>)</h3>
+        <p>Process injection is accomplished using a technique called Parent PID Spoofing combined with Process Hollowing.</p>
+        <ol>
+            <li>Resolves the PID of <code>explorer.exe</code> using <code>CreateToolhelp32Snapshot</code>.</li>
+            <li>Uses <code>InitializeProcThreadAttributeList</code> and <code>UpdateProcThreadAttribute</code> to assign <code>explorer.exe</code> as the parent of the new process.</li>
+            <li>Spawns <code>notepad.exe</code> in a suspended state (<code>CREATE_SUSPENDED</code>).</li>
+            <li>Traverses the PEB (Process Environment Block) to find the Image Base Address, calculates the Entry Point offset, writes malicious shellcode to the Entry Point via <code>WriteProcessMemory</code>, and calls <code>ResumeThread</code>.</li>
+        </ol>
+
+        <h3>D. Privilege Escalation (<code>uac.c</code> & <code>token.c</code>)</h3>
+        <p>If the user is standard but UAC is enabled, the implant utilizes a registry-based UAC bypass targeting <code>slui.exe</code>.</p>
+        <ul>
+            <li><strong>Registry Bypass:</strong> Writes the path of the implant to <code>HKCU\Software\Classes\Launcher.SystemSettings\Shell\Open\Command</code> and creates an empty <code>DelegateExecute</code> key. Calling <code>slui.exe</code> with the <code>runas</code> verb automatically triggers the high-integrity payload execution without prompting the user.</li>
+            <li><strong>Token Duplication:</strong> If already elevated, <code>SpawnImplantWithToken</code> locates <code>winlogon.exe</code> (which runs as <code>NT AUTHORITY\SYSTEM</code>), opens its process token, duplicates it via <code>DuplicateTokenEx</code>, and restarts the implant via <code>CreateProcessWithTokenW</code> to achieve SYSTEM level privileges.</li>
+        </ul>
+
+        <h3>E. Ring 0 / Kernel Mode (<code>driver.c</code>)</h3>
+        <p>RogueOne implements a BYOVD (Bring Your Own Vulnerable Driver) attack to blind EDRs or forcibly delete locked files.</p>
+        <ul>
+            <li>Drops a known vulnerable driver (referenced as CVE-2019-6494 / CVE-2025-26125) to <code>%TEMP%\MicrosoftUpdate11.01.sys</code>.</li>
+            <li>Installs the driver as a Kernel Service via the Windows Service Control Manager (SCM).</li>
+            <li>Issues raw Device IO Control (IOCTL) codes—specifically <code>0x8016E000</code>—to the driver via <code>\\.\IMFForceDelete123</code> to execute forced file deletion from ring 0.</li>
+        </ul>
+
+        <div class="divider">::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</div>
+
+        <h2>3. Data Structures Table</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Component</th>
+                    <th>Subsystem</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>TLV_MESSAGE</code></td>
+                    <td>Networking</td>
+                    <td>Handles internal packet mapping (Type, Length, Value array).</td>
+                </tr>
+                <tr>
+                    <td><code>CRYPTO_CTX</code></td>
+                    <td>Cryptography</td>
+                    <td>Holds the 32-byte AES-256 session key derived post-handshake.</td>
+                </tr>
+                <tr>
+                    <td><code>G_CommandTable</code></td>
+                    <td>Dispatch</td>
+                    <td>Global array of <code>COMMAND_MAP</code> struct matching Enums to functions.</td>
+                </tr>
+                <tr>
+                    <td><code>MY_PEB_LDR_DATA</code></td>
+                    <td>Evasion (NTAPI)</td>
+                    <td>Custom definitions to manually traverse process memory for loaded DLLs, avoiding tracked API calls like <code>EnumProcessModules</code>.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p><em>End of analysis. Agent terminates loop on CMD_QUIT, wiping internal crypto contexts and closing child process handles.</em></p>
+
+    </article>
+</div>
+
+</body>
+</html>

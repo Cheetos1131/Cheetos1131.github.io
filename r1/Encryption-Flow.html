@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RogueOne: Cryptography Deep Dive</title>
+    <style>
+        /* Modern Vanilla CSS Variables */
+        :root {
+            --accent-blue: #23B0FF;
+            --accent-green: #78E2A0;
+            --accent-orange: #FFA86A;
+            --accent-purple: #aa60ff;
+            --accent-pink: #EE72F1;
+            --accent-red: #FF6266;
+            --accent-yellow: #dbd963;
+            --accent: var(--accent-orange); /* Default accent for this page */
+            --background: color-mix(in srgb, var(--accent) 2%, #1D1E28 98%);
+            --accent-contrast-color: black;
+            --color: white;
+            --border-color: rgba(255, 255, 255, .1);
+        }
+
+        /* Fira Code Fallback (Using system Monospace for immediate rendering) */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Fira Code', Monaco, Consolas, Ubuntu Mono, monospace;
+            font-size: 1rem;
+            line-height: 1.54;
+            background-color: var(--background);
+            color: var(--color);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar { height: 6px; width: 6px; background-color: transparent; }
+        ::-webkit-scrollbar-thumb { background-color: #4a4d52; border: 1px solid #282a2d; border-radius: 2px; }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            padding: 40px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        /* Header Navigation Styles */
+        .header { display: flex; flex-direction: column; position: relative; margin-bottom: 40px;}
+        .header__logo {
+            display: flex; flex: 1 1 auto; column-gap: 2px;
+            border-right: var(--accent) 2px solid;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .header__logo:after {
+            content: '';
+            background: repeating-linear-gradient(90deg, transparent, transparent 8px, var(--accent) 8px, var(--accent) 10px);
+            display: block; width: 100%; right: 10px;
+        }
+        
+        .header-link {
+            display: flex; align-items: center; text-decoration: none;
+            background: var(--accent); color: var(--accent-contrast-color);
+            padding: 5px 10px; transition: 0.3s all ease;
+        }
+        .header-link:hover { background-color: color-mix(in srgb, var(--accent) 75%, black); }
+
+        /* Rainbow Math for Header Links */
+        .header__logo > a:nth-child(1) { --accent: var(--accent-pink); }
+        .header__logo > a:nth-child(2) { --accent: var(--accent-purple); }
+        .header__logo > a:nth-child(3) { --accent: var(--accent-blue); }
+        .header__logo > a:nth-child(4) { --accent: var(--accent-green); }
+
+        /* Typography & Layout */
+        h1, h2, h3 { color: var(--accent); line-height: 1.3; }
+        h1 { border-bottom: 3px dotted var(--accent); padding-bottom: 10px; margin-bottom: 5px; }
+        h3 { margin-top: 35px; }
+        
+        p { margin-bottom: 20px; overflow-wrap: break-word; text-align: justify; }
+
+        code {
+            background: color-mix(in srgb, var(--accent), transparent 92%);
+            color: color-mix(in srgb, var(--accent), white);
+            padding: 2px 4px; border-radius: 3px; font-size: 0.95rem;
+        }
+
+        pre {
+            background: #2a2a2a !important; padding: 20px 10px;
+            margin: 20px 0; overflow: auto;
+            border-left: 4px solid var(--accent);
+        }
+        pre code { background: none !important; color: var(--accent-green); }
+
+        table { width: 100%; border-collapse: collapse; margin: 40px 0; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { color: var(--accent); border-bottom: 2px solid var(--accent); }
+        table tbody tr:nth-child(2n+1) { background-color: color-mix(in srgb, var(--accent) 2%, #ffffff05); }
+
+        .framed { border: 1px solid var(--accent); padding: 20px; margin: 20px 0; }
+        .framed h3 { margin-top: 0; }
+        
+        .tags { color: color-mix(in srgb, var(--accent), transparent 30%); font-size: 0.9rem; margin-bottom: 30px; }
+        .divider { color: var(--accent); overflow: hidden; white-space: nowrap; margin: 20px 0; letter-spacing: 2px; font-weight: bold;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header class="header">
+        <div class="header__logo">
+            <a href="#" class="header-link" style="--accent: var(--accent-pink);">rogueone_crypto</a>
+            <a href="#ecdh" class="header-link" style="--accent: var(--accent-purple);">ecdh_p256</a>
+            <a href="#kdf" class="header-link" style="--accent: var(--accent-blue);">kdf_sha256</a>
+            <a href="#aes" class="header-link" style="--accent: var(--accent-green);">aes_cbc_engine</a>
+        </div>
+    </header>
+
+    <article class="post">
+        <h1>Cryptographic Internals: ECDH & AES-CBC</h1>
+        <div class="tags">
+            DATE: 2026-04-19 | TAGS: <code>crypto</code> <code>math</code> <code>secp256r1</code> <code>aes-cbc</code> <code>cng</code>
+        </div>
+
+        <p>The RogueOne framework completely abandons standard TLS/SSL overhead in favor of a raw, deeply integrated cryptographic protocol. By utilizing the native Windows Cryptography API: Next Generation (CNG) on the implant side and Python's <code>cryptography</code> module on the server side, the binary remains extremely small while mathematically ensuring forward secrecy.</p>
+
+        <p>This document details the complete mathematical foundation, API implementation, and data flow required to securely exchange keys and encapsulate traffic within this environment.</p>
+
+        <div class="divider">::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</div>
+
+        <h2 id="ecdh">1. Elliptic Curve Diffie-Hellman (ECDH)</h2>
+        <p>ECDH is an asymmetric key agreement protocol that allows two parties to establish a shared secret over an insecure channel. It relies on the algebraic structure of elliptic curves over finite fields, specifically the Elliptic Curve Discrete Logarithm Problem (ECDLP).</p>
+
+        <h3>1.1 Mathematical Foundations</h3>
+        <p>An elliptic curve over a finite prime field is defined by the Weierstrass equation:</p>
+        <p><code>y² = x³ + ax + b (mod p)</code></p>
+        <p>The core of ECDH is <strong>Scalar Multiplication</strong>, which involves adding a generator point to itself <em>k</em> times (denoted as <em>k &times; G</em>). While it is computationally trivial to calculate the resulting point <em>Q</em>, it is computationally infeasible to reverse the math and determine the scalar <em>k</em> (the private key) given only <em>Q</em> and <em>G</em>.</p>
+        <p>During the exchange:</p>
+        <ol>
+            <li>The Implant selects a private integer <em>d<sub>A</sub></em> and computes its public key <em>Q<sub>A</sub> = d<sub>A</sub> &times; G</em>.</li>
+            <li>The C2 Server selects a private integer <em>d<sub>B</sub></em> and computes its public key <em>Q<sub>B</sub> = d<sub>B</sub> &times; G</em>.</li>
+            <li>The parties exchange <em>Q<sub>A</sub></em> and <em>Q<sub>B</sub></em> over the plaintext TCP socket.</li>
+            <li>Both parties calculate the shared secret. The Implant calculates <em>S = d<sub>A</sub> &times; Q<sub>B</sub></em>, and the Server calculates <em>S = d<sub>B</sub> &times; Q<sub>A</sub></em>.</li>
+        </ol>
+
+        <h3>1.2 The RogueOne ECDH Handshake Implementation</h3>
+        <p>The implant explicitly utilizes the NIST P-256 curve (mathematically equivalent to <code>secp256r1</code>). The handshake is orchestrated by the <code>CryptoHandshake()</code> function.</p>
+
+        <div class="framed">
+            <h4>Implant Key Generation & Export</h4>
+            <p>The implant invokes the Windows CNG API to generate an ephemeral key pair by opening the <code>BCRYPT_ECDH_P256_ALGORITHM</code> provider and calling <code>BCryptGenerateKeyPair</code>.</p>
+            <p>To ensure cross-platform compatibility with the Python C2 server, the implant cannot send native Windows <code>BCRYPT_ECCPUBLIC_BLOB</code> structures over the wire. It must extract the raw mathematical points (X and Y coordinates) and construct a standard 65-byte uncompressed point.</p>
+<pre><code>// crypto.c: ExportPubkeyWire()
+// The BCrypt blob starts with an 8-byte header, followed by 32 bytes of X, then 32 bytes of Y.
+out[0] = 0x04; // Standard prefix denoting an "Uncompressed Point"
+memcpy(out + 1,      blob + sizeof(BCRYPT_ECCKEY_BLOB),      32); // X Coordinate
+memcpy(out + 1 + 32, blob + sizeof(BCRYPT_ECCKEY_BLOB) + 32, 32); // Y Coordinate</code></pre>
+        </div>
+
+        <p>This 65-byte payload is transmitted via <code>RawSendAll</code>. The server receives it, verifies the <code>0x04</code> prefix, parses it using <code>EllipticCurvePublicKey.from_encoded_point()</code>, generates its own ephemeral keypair via <code>generate_private_key()</code>, and sends its 65-byte public key back to the implant.</p>
+
+        <div class="divider">::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</div>
+
+        <h2 id="kdf">2. The Endianness Problem & Key Derivation (KDF)</h2>
+        <p>Using the raw X-coordinate of the ECDH shared secret directly as an AES key is a cryptographic anti-pattern, as it is not uniformly distributed. The raw secret must be passed through a Key Derivation Function (KDF)—specifically SHA-256—to "smash" the bits into a high-entropy key.</p>
+
+        <h3>The Cross-Platform Endianness Quirk</h3>
+        <p>When the Python server calculates the shared secret (<code>server_priv.exchange(ECDH(), implant_pub)</code>), the resulting 32-byte X-coordinate is returned in <strong>Big-Endian</strong> byte order.</p>
+        <p>However, when the Windows CNG API (<code>BCryptSecretAgreement</code> followed by <code>BCryptDeriveKey</code> with <code>BCRYPT_KDF_RAW_SECRET</code>) calculates the exact same point, Microsoft returns the 32-byte X-coordinate in <strong>Little-Endian</strong> byte order. If both sides hashed these bytes directly, they would generate entirely different AES session keys.</p>
+        <p>The implant developer accounted for this by manually reversing the byte array in memory before hashing it:</p>
+
+<pre><code>// crypto.c: CryptoHandshake()
+// BCryptDeriveKey returns the X coordinate in little-endian order on Windows.
+// Reverse to get the canonical big-endian representation before hashing.
+for (DWORD i = 0; i < secretLen / 2; i++)
+{
+    BYTE tmp = secretBuf[i];
+    secretBuf[i] = secretBuf[secretLen - 1 - i];
+    secretBuf[secretLen - 1 - i] = tmp;
+}</code></pre>
+
+        <p>Both sides then pass the synchronized 32-byte Big-Endian X-coordinate into SHA-256. The resulting 32-byte digest becomes the final AES-256 session key, saved into the opaque <code>CRYPTO_CTX</code> struct on the implant.</p>
+
+        <div class="divider">::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</div>
+
+        <h2 id="aes">3. Advanced Encryption Standard (AES) Core Mechanics</h2>
+        <p>AES is a symmetric-key block cipher based on the Rijndael design, operating on fixed-size blocks of 16 bytes. Because RogueOne utilizes a 32-byte key derived from the ECDH handshake, it operates specifically as AES-256.</p>
+
+        <h3>3.1 Key Expansion & Rounds</h3>
+        <p>The 256-bit key cannot be used directly for every round. AES utilizes a Key Schedule to expand the 32-byte master key into a series of 16-byte Round Keys. AES-256 executes 14 identical rounds of mathematical transformations on a 4x4 matrix known as the State.</p>
+        <ul>
+            <li><strong>SubBytes:</strong> Every byte in the State matrix is independently replaced with another byte using a non-linear S-box.</li>
+            <li><strong>ShiftRows:</strong> Provides diffusion by shifting the rows of the State matrix cyclically to the left.</li>
+            <li><strong>MixColumns:</strong> Each column is multiplied against a fixed polynomial over Galois Field (2⁸), creating massive diffusion.</li>
+            <li><strong>AddRoundKey:</strong> The 16-byte Round Key is combined with the State matrix using a bitwise XOR operation.</li>
+        </ul>
+
+        <h3>3.2 Cipher Block Chaining (CBC) Mode</h3>
+        <p>By itself, the AES core algorithm only encrypts exactly 16 bytes deterministically (Electronic Codebook mode). To encrypt arbitrarily large TLV payloads securely, RogueOne deploys AES inside <strong>Cipher Block Chaining (CBC)</strong> mode.</p>
+        
+        <p>In CBC mode, before a plaintext block is passed into the AES algorithm, it is XORed with the ciphertext of the previously encrypted block. For the very first block, an Initialization Vector (IV) is used.</p>
+
+        <div class="framed">
+            <h3>IV Generation</h3>
+            <p>To prevent pattern analysis, the IV must be unpredictable. The RogueOne implant generates a fresh, random 16-byte IV for <em>every single frame transmitted</em> using <code>BCryptGenRandom</code> with <code>BCRYPT_USE_SYSTEM_PREFERRED_RNG</code>. The Python server mirrors this behavior using <code>os.urandom(AES_BLOCK_LEN)</code>.</p>
+        </div>
+
+        <h3>3.3 PKCS#7 Padding</h3>
+        <p>Because AES operates strictly on 16-byte blocks, payloads must be padded to a multiple of 16 bytes before encryption. RogueOne uses the PKCS#7 padding scheme. In PKCS#7, the value of each added padding byte is equal to the total number of bytes added (e.g., adding four bytes results in <code>0x04 0x04 0x04 0x04</code>).</p>
+        <ul>
+            <li><strong>Implant implementation:</strong> Relies on the native <code>BCRYPT_BLOCK_PADDING</code> flag during <code>BCryptEncrypt</code> to automatically apply PKCS#7 padding.</li>
+            <li><strong>Server implementation:</strong> The Python server calculates this mathematically before encryption (<code>pad_len = AES_BLOCK_LEN - (len(plaintext) % AES_BLOCK_LEN)</code>) and manually strips the bytes after decryption by reading the value of the final byte (<code>pad_byte = padded[-1]</code>).</li>
+        </ul>
+
+        <div class="divider">::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</div>
+
+        <h2 id="wire">4. Wire Frame Encapsulation</h2>
+        <p>To orchestrate the transmission of these AES-CBC streams over TCP, RogueOne encapsulates all TLV traffic inside a rigid wire frame format. Every single chunk sent over the wire looks exactly like this:</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Byte Offset</th>
+                    <th>Size</th>
+                    <th>Component</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>0x00</code></td>
+                    <td>4 Bytes</td>
+                    <td>Plaintext Length</td>
+                    <td>A 32-bit Little-Endian integer denoting the exact unpadded length of the decrypted payload.</td>
+                </tr>
+                <tr>
+                    <td><code>0x04</code></td>
+                    <td>16 Bytes</td>
+                    <td>Initialization Vector</td>
+                    <td>The 16-byte random IV generated dynamically for the AES-CBC encryption of this specific frame.</td>
+                </tr>
+                <tr>
+                    <td><code>0x14</code></td>
+                    <td>N Bytes</td>
+                    <td>Ciphertext</td>
+                    <td>The AES-256-CBC encrypted payload, padded to a 16-byte multiple via PKCS#7.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Handling Zero-Length Payloads</h3>
+        <p>The C2 protocol utilizes empty packets (Length = 0) to signal the end of a fragmented TLV stream (an EOF marker). The cryptographic layer gracefully handles 0-byte encryptions. When <code>plainLen</code> is 0, the engine encrypts exactly one 16-byte block containing only PKCS#7 padding bytes (sixteen <code>0x10</code> bytes). This ensures the frame structure remains cryptographically secure and perfectly aligned for the receiving parser.</p>
+
+    </article>
+</div>
+
+</body>
+</html>
