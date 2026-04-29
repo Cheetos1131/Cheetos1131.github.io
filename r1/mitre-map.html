@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RogueOne: MITRE ATT&CK Mapping</title>
+    <style>
+        /* Modern Vanilla CSS Variables */
+        :root {
+            --accent-blue: #23B0FF;
+            --accent-green: #78E2A0;
+            --accent-orange: #FFA86A;
+            --accent-purple: #aa60ff;
+            --accent-pink: #EE72F1;
+            --accent-red: #FF6266;
+            --accent-yellow: #dbd963;
+            --accent: var(--accent-green); /* Default accent for this page */
+            --background: color-mix(in srgb, var(--accent) 2%, #1D1E28 98%);
+            --accent-contrast-color: black;
+            --color: white;
+            --border-color: rgba(255, 255, 255, .1);
+        }
+
+        /* Fira Code Fallback */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Fira Code', Monaco, Consolas, Ubuntu Mono, monospace;
+            font-size: 1rem;
+            line-height: 1.54;
+            background-color: var(--background);
+            color: var(--color);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar { height: 6px; width: 6px; background-color: transparent; }
+        ::-webkit-scrollbar-thumb { background-color: #4a4d52; border: 1px solid #282a2d; border-radius: 2px; }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            padding: 40px;
+            max-width: 950px;
+            margin: 0 auto;
+        }
+
+        /* Header Navigation Styles */
+        .header { display: flex; flex-direction: column; position: relative; margin-bottom: 40px;}
+        .header__logo {
+            display: flex; flex: 1 1 auto; column-gap: 2px;
+            border-right: var(--accent) 2px solid;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .header__logo:after {
+            content: '';
+            background: repeating-linear-gradient(90deg, transparent, transparent 8px, var(--accent) 8px, var(--accent) 10px);
+            display: block; width: 100%; right: 10px;
+        }
+        
+        .header-link {
+            display: flex; align-items: center; text-decoration: none;
+            background: var(--accent); color: var(--accent-contrast-color);
+            padding: 5px 10px; transition: 0.3s all ease;
+        }
+        .header-link:hover { background-color: color-mix(in srgb, var(--accent) 75%, black); }
+
+        /* Rainbow Math for Header Links */
+        .header__logo > a:nth-child(1) { --accent: var(--accent-pink); }
+        .header__logo > a:nth-child(2) { --accent: var(--accent-purple); }
+        .header__logo > a:nth-child(3) { --accent: var(--accent-blue); }
+        .header__logo > a:nth-child(4) { --accent: var(--accent-green); }
+
+        /* Typography & Layout */
+        h1, h2, h3 { color: var(--accent); line-height: 1.3; margin-top: 40px;}
+        h1 { border-bottom: 3px dotted var(--accent); padding-bottom: 10px; margin-bottom: 5px; margin-top: 0;}
+        h4 { color: var(--accent-yellow); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+        
+        p { margin-bottom: 20px; overflow-wrap: break-word; text-align: justify; }
+
+        code {
+            background: color-mix(in srgb, var(--accent), transparent 92%);
+            color: color-mix(in srgb, var(--accent), white);
+            padding: 2px 4px; border-radius: 3px; font-size: 0.95rem;
+        }
+
+        .framed { border: 1px solid var(--accent); padding: 25px; margin: 30px 0; background: color-mix(in srgb, var(--accent) 3%, transparent); }
+        .framed h3 { margin-top: 0; color: var(--accent-blue); border-bottom: 1px solid var(--border-color); padding-bottom: 10px;}
+        
+        .mitigation { border-left: 4px solid var(--accent-green); padding-left: 15px; margin-top: 20px; background: color-mix(in srgb, var(--accent-green) 5%, transparent); padding: 10px 15px;}
+        .tags { color: color-mix(in srgb, var(--accent), transparent 30%); font-size: 0.9rem; margin-bottom: 30px; }
+        .divider { color: var(--accent); overflow: hidden; white-space: nowrap; margin: 20px 0; letter-spacing: 2px; font-weight: bold;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header class="header">
+        <div class="header__logo">
+            <a href="#" class="header-link" style="--accent: var(--accent-pink);">threat_intel</a>
+            <a href="#evasion" class="header-link" style="--accent: var(--accent-purple);">defense_evasion</a>
+            <a href="#privesc" class="header-link" style="--accent: var(--accent-blue);">privilege_escalation</a>
+            <a href="#persistence" class="header-link" style="--accent: var(--accent-green);">persistence</a>
+        </div>
+    </header>
+
+    <article class="post">
+        <h1>RogueOne: MITRE ATT&CK Map</h1>
+        <div class="tags">
+            DATE: 2026-04-19 | TAGS: <code>mitre</code> <code>att&ck</code> <code>c2-analysis</code> <code>threat-hunting</code>
+        </div>
+
+        <p>The RogueOne implant utilizes highly sophisticated techniques spanning multiple MITRE ATT&CK tactics to establish persistence, elevate privileges, and evade local endpoint defenses. The following mapping details the exact implementation of these techniques within the implant's source code, alongside actionable mitigation strategies for defenders.</p>
+
+        <div class="divider">::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</div>
+
+        <h2 id="evasion">TA0005: Defense Evasion & TA0002: Execution</h2>
+
+        <div class="framed">
+            <h3>T1055.012 - Process Injection: Process Hollowing</h3>
+            <p><strong>Implementation:</strong> The implant relies heavily on Process Hollowing to execute arbitrary shellcode in memory without touching the disk. It spawns a benign process (<code>notepad.exe</code>) in a suspended state using the <code>CREATE_SUSPENDED</code> flag. It then uses NTAPIs like <code>NtQueryInformationProcess</code> to locate the Process Environment Block (PEB), calculates the entry point offset, overwrites the target's legitimate executable code with malicious shellcode using <code>WriteProcessMemory</code>, and executes it via <code>ResumeThread</code>.</p>
+            <p><strong>Additionally (T1134.004 - Parent PID Spoofing):</strong> To mask the true origin of the hollowed process, the implant dynamically resolves the PID of <code>explorer.exe</code> and uses <code>InitializeProcThreadAttributeList</code> alongside <code>UpdateProcThreadAttribute</code> to assign <code>explorer.exe</code> as the hollowed process's parent.</p>
+            <div class="mitigation">
+                <h4>Mitigation & Remediation</h4>
+                <p>Implement EDR solutions capable of monitoring API calls related to thread context manipulation (<code>GetThreadContext</code> / <code>SetThreadContext</code>) and memory modifications in newly spawned suspended processes. Enable Windows Defender Application Control (WDAC) and monitor for anomalous Parent-Child process relationships (e.g., an unexpected process suddenly spawning <code>notepad.exe</code> with <code>explorer.exe</code> as the spoofed parent).</p>
+            </div>
+        </div>
+
+        <div class="framed">
+            <h3>T1027 - Obfuscated Files or Information</h3>
+            <p><strong>Implementation:</strong> The developer attempted to hide critical strings (such as registry keys and executable paths) from static analysis tools. In <code>uac.c</code>, the target registry path <code>Software\Classes\Launcher.SystemSettings\Shell\Open\Command</code> is Base64 encoded inside the binary as <code>UwBvAGYAdAB3AGE...</code>. The implant uses the native Cryptography API (<code>CryptStringToBinaryW</code>) inside <code>enc.c</code> to dynamically decode these strings at runtime.</p>
+            <div class="mitigation">
+                <h4>Mitigation & Remediation</h4>
+                <p>Relying purely on static string signatures is ineffective against this. Utilize dynamic analysis (sandboxing) or memory scanning (like YARA rules scanning active process memory) to capture the decoded strings after the implant decrypts them in RAM.</p>
+            </div>
+        </div>
+
+        <div class="framed">
+            <h3>T1059.003 - Command and Scripting Interpreter: Windows Command Shell</h3>
+            <p><strong>Implementation:</strong> The implant implements a remote shell functionality via the <code>runcmd</code> feature. It calls <code>CreateProcessW</code> to spawn <code>cmd.exe /c [command]</code> and routes the STDOUT and STDERR streams through anonymous pipes (<code>CreatePipe</code>) back to the socket.</p>
+            <div class="mitigation">
+                <h4>Mitigation & Remediation</h4>
+                <p>Enable Command Line Auditing (Event ID 4688) via Group Policy to log the exact arguments passed to <code>cmd.exe</code>. Monitor for unusual processes spawning <code>cmd.exe</code> with piped outputs.</p>
+            </div>
+        </div>
+
+        <div class="divider">::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</div>
+
+        <h2 id="privesc">TA0004: Privilege Escalation</h2>
+
+        <div class="framed">
+            <h3>T1548.002 - Bypass User Account Control (UAC)</h3>
+            <p><strong>Implementation:</strong> If the implant detects it is running in a medium-integrity context, it attempts a fileless UAC bypass. It achieves this by modifying the current user's registry to hijack the execution flow of an auto-elevating Windows binary. Specifically, it creates the key <code>HKCU\Software\Classes\Launcher.SystemSettings\Shell\Open\Command</code>, points the default value to its own executable path, and creates an empty <code>DelegateExecute</code> value. Finally, it triggers the payload by calling <code>ShellExecuteW</code> with the <code>runas</code> verb on <code>slui.exe</code>, forcing the OS to launch the implant with High Integrity.</p>
+            <div class="mitigation">
+                <h4>Mitigation & Remediation</h4>
+                <p>Configure UAC settings to "Always Notify" to prevent auto-elevation of binaries like <code>slui.exe</code>. Monitor registry modifications in the <code>HKCU\Software\Classes\</code> hive, particularly looking for unusual <code>Shell\Open\Command</code> or <code>DelegateExecute</code> key creations.</p>
+            </div>
+        </div>
+
+        <div class="framed">
+            <h3>T1134.001 - Access Token Manipulation: Token Impersonation/Theft</h3>
+            <p><strong>Implementation:</strong> Once running as an Administrator, the implant attempts to reach `NT AUTHORITY\SYSTEM`. It iterates through running processes to find <code>winlogon.exe</code>. Using <code>OpenProcessToken</code> and <code>DuplicateTokenEx</code> (requesting <code>SecurityImpersonation</code> and <code>TokenPrimary</code>), it steals the SYSTEM token. It then utilizes <code>CreateProcessWithTokenW</code> to respawn itself with ultimate system privileges.</p>
+            <div class="mitigation">
+                <h4>Mitigation & Remediation</h4>
+                <p>Enforce the principle of least privilege. Monitor for unusual processes acquiring the <code>SeDebugPrivilege</code>, which is required to open the token of <code>winlogon.exe</code>. Advanced EDRs should flag unauthorized binaries calling <code>DuplicateTokenEx</code> on highly privileged SYSTEM processes.</p>
+            </div>
+        </div>
+
+        <div class="framed">
+            <h3>T1068 - Exploitation for Privilege Escalation (BYOVD)</h3>
+            <p><strong>Implementation:</strong> The implant utilizes a "Bring Your Own Vulnerable Driver" (BYOVD) technique to achieve Ring-0 (Kernel) code execution. It drops a payload to <code>%TEMP%\MicrosoftUpdate11.01.sys</code> and registers it as a kernel service. The code explicitly references CVE-2019-6494 and CVE-2025-26125. Once loaded, it issues <code>DeviceIoControl</code> commands to <code>\\.\IMFForceDelete123</code> to forcefully delete files (likely targeting locked EDR files) from the kernel level.</p>
+            <div class="mitigation">
+                <h4>Mitigation & Remediation</h4>
+                <p>Enable Microsoft's Vulnerable Driver Blocklist via Windows Defender Application Control (WDAC). Enable Hypervisor-Protected Code Integrity (HVCI) to prevent unauthorized or known-vulnerable drivers from loading into the kernel space, regardless of Administrator privileges.</p>
+            </div>
+        </div>
+
+        <div class="divider">::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</div>
+
+        <h2 id="persistence">TA0003: Persistence</h2>
+
+        <div class="framed">
+            <h3>T1543.003 - Create or Modify System Process: Windows Service</h3>
+            <p><strong>Implementation:</strong> To survive reboots, the implant can install itself as a native Windows service. It uses the <code>OpenSCManagerW</code> and <code>CreateServiceW</code> APIs to create a service named <code>WinTelemetry</code>. It configures the service with the <code>SERVICE_AUTO_START</code> flag to ensure it executes automatically upon system boot, running as the LocalSystem account. It also sets a deceptive display name ("Windows Telemetry Agent") to blend in with legitimate OS functions.</p>
+            <div class="mitigation">
+                <h4>Mitigation & Remediation</h4>
+                <p>Monitor Windows Event Logs (System Event ID 7045 - A new service was installed in the system). Audit newly created services that point to binaries residing in unusual directories (like user profiles or <code>%TEMP%</code>). Restrict non-administrative users' ability to interact with the Service Control Manager.</p>
+            </div>
+        </div>
+
+        <div class="divider">::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</div>
+
+        <h2 id="c2">TA0011: Command and Control</h2>
+
+        <div class="framed">
+            <h3>T1573.001 - Encrypted Channel: Symmetric Cryptography</h3>
+            <p><strong>Implementation:</strong> The implant completely avoids standard TLS/SSL to evade standard network decryptors. It establishes an AES-256-CBC encrypted tunnel over a raw TCP socket. The symmetric key is dynamically generated per-session using an Elliptic Curve Diffie-Hellman (ECDH P-256) key exchange over the wire.</p>
+            <div class="mitigation">
+                <h4>Mitigation & Remediation</h4>
+                <p>Because the implant uses custom crypto, traditional SSL inspection will fail. Rely on Network Traffic Analysis (NTA) to detect anomalous TCP connections to unknown external IPs, specifically looking for the 65-byte uncompressed public key signature (starting with <code>0x04</code>) transmitted in plaintext during the initial ECDH handshake.</p>
+            </div>
+        </div>
+
+    </article>
+</div>
+
+</body>
+</html>
